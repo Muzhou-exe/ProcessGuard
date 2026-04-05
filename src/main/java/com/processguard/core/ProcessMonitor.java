@@ -58,7 +58,7 @@ public class ProcessMonitor {
         if (isRunning.compareAndSet(false, true)) {
             scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
                 Thread t = new Thread(r, "ProcessGuard-Monitor");
-                t.setDaemon(true);
+                t.setDaemon(false);
                 return t;
             });
 
@@ -116,7 +116,12 @@ public class ProcessMonitor {
             System.out.println("\n=== SCAN CYCLE ===");
             System.out.println("Processes: " + currentSnapshot.size());
 
-            for (ProcessInfo p : currentSnapshot.stream().limit(10).toList()) {
+            List<ProcessInfo> sorted = currentSnapshot.stream()
+                    .sorted((a, b) -> Long.compare(b.getMemoryUsageMB(), a.getMemoryUsageMB()))
+                    .limit(20)
+                    .toList();
+
+            for (ProcessInfo p : sorted) {
                 System.out.println(p);
             }
 
