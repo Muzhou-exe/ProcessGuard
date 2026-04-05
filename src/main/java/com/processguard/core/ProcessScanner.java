@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.Set;
+import java.util.Map;
+import java.util.HashMap;
 
 /**
  * Responsible for enumerating all running system processes and returning immutable ProcessInfo snapshots.
@@ -22,7 +24,20 @@ import java.util.Set;
  */
 public class ProcessScanner {
 
+    private static class ProcessMetrics {
+        double cpu;
+        long memoryMB;
+
+        ProcessMetrics(double cpu, long memoryMB) {
+            this.cpu = cpu;
+            this.memoryMB = memoryMB;
+        }
+    }
+
     private final AppConfig config = AppConfig.getInstance();
+
+    // Cache for ps lookups: PID -> process name
+    private final Map<Long, String> psNameCache = new HashMap<>();
 
     /**
      * Returns a snapshot of all currently running processes.
@@ -32,128 +47,87 @@ public class ProcessScanner {
     public List<ProcessInfo> scanProcesses() {
         List<ProcessInfo> processes = new ArrayList<>();
 
-        try {
-            // Primary method: Java ProcessHandle API (cross-platform)
-            processes = ProcessHandle.allProcesses()
-                    .map(this::convertToProcessInfo)
-                    .collect(Collectors.toList());
+        Map<Long, ProcessMetrics> metrics =
+                isWindows() ? scanMetricsWithTasklist() : scanMetricsWithPs();
 
-        } catch (Exception e) {
-            System.err.println("Warning: ProcessHandle scan failed. Falling back to platform-specific method.");
-        }
+        ProcessHandle.allProcesses().forEach(handle -> {
+            try {
+                long pid = handle.pid();
 
-        // If ProcessHandle returned very few processes or failed, use fallback for Windows
-        if (processes.isEmpty() || isWindows() && processes.size() < 50) {
-            List<ProcessInfo> fallbackProcesses = scanWithTasklist();
-            if (!fallbackProcesses.isEmpty()) {
-                processes = fallbackProcesses;
+                String executablePath = handle.info().command().orElse("");
+                String name = executablePath.isBlank()
+                        ? "unknown"
+                        : executablePath.substring(executablePath.lastIndexOf(java.io.File.separator) + 1);
+
+                // Fallback if name is unknown
+                if (name.equals("unknown")) {
+                    ProcessInfo psFallback = psLookup(handle.pid());
+                    name = psFallback != null ? psFallback.getName() : "unknown";
+                }
+
+                long parentPid = handle.parent().map(ProcessHandle::pid).orElse(-1L);
+                Instant startTime = handle.info().startInstant().orElse(Instant.EPOCH);
+
+                ProcessMetrics m = metrics.getOrDefault(pid, new ProcessMetrics(0.0, 0));
+
+                processes.add(new ProcessInfo(
+                        pid,
+                        name,
+                        executablePath,
+                        m.cpu,
+                        m.memoryMB,
+                        parentPid,
+                        startTime
+                ));
+
+            } catch (Exception ignored) {
             }
-        }
+        });
 
-        // Classify processes based on config (blacklist/whitelist)
         classifyProcesses(processes);
-
         return processes;
-    }
-
-    /**
-     * Converts a ProcessHandle to ProcessInfo.
-     */
-    private ProcessInfo convertToProcessInfo(ProcessHandle handle) {
-        try {
-            long pid = handle.pid();
-            String name = handle.info().command().orElse("unknown")
-                    .substring(handle.info().command().orElse("unknown").lastIndexOf(java.io.File.separator) + 1);
-
-            String executablePath = handle.info().command().orElse("");
-
-            // CPU and Memory usage estimation (ProcessHandle has limited support)
-            double cpuUsage = estimateCpuUsage(handle);
-            long memoryUsageMB = estimateMemoryUsageMB(handle);
-            long parentPid = handle.parent().map(ProcessHandle::pid).orElse(-1L);
-            Instant startTime = handle.info().startInstant().orElse(Instant.EPOCH);
-
-            return new ProcessInfo(pid, name, executablePath, cpuUsage, memoryUsageMB, parentPid, startTime);
-
-        } catch (Exception e) {
-            // Fallback for any process that fails to read
-            return new ProcessInfo(handle.pid(), "unknown", "", 0.0, 0L, -1L, Instant.EPOCH);
-        }
-    }
-
-    /**
-     * Basic CPU usage estimation (ProcessHandle does not provide direct % usage).
-     * Returns a placeholder value; can be enhanced with JMX or external tools if needed.
-     */
-    private double estimateCpuUsage(ProcessHandle handle) {
-        try {
-            // Rough estimation using OS-specific methods can be added here in future
-            return 0.0; // Placeholder - will be improved in monitoring layer if needed
-        } catch (Exception e) {
-            return 0.0;
-        }
-    }
-
-    /**
-     * Estimates memory usage in MB using available ProcessHandle info.
-     */
-    private long estimateMemoryUsageMB(ProcessHandle handle) {
-        try {
-            // ProcessHandle.info().totalCpuDuration() or other metrics are limited
-            // For better accuracy, tasklist fallback is used on Windows
-            return 0L; // Placeholder
-        } catch (Exception e) {
-            return 0L;
-        }
     }
 
     /**
      * Windows-specific fallback using 'tasklist' command for better CPU/Memory details.
      */
-    private List<ProcessInfo> scanWithTasklist() {
-        List<ProcessInfo> processes = new ArrayList<>();
+    private Map<Long, ProcessMetrics> scanMetricsWithTasklist() {
+        Map<Long, ProcessMetrics> metrics = new HashMap<>();
 
-        if (!isWindows()) {
-            return processes;
-        }
+        if (!isWindows()) return metrics;
 
         try {
-            ProcessBuilder pb = new ProcessBuilder("tasklist", "/fo", "csv", "/nh");
-            Process process = pb.start();
+            Process process = new ProcessBuilder(
+                    "tasklist", "/fo", "csv", "/nh"
+            ).start();
 
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream()))) {
+
                 String line;
                 while ((line = reader.readLine()) != null) {
                     String[] parts = line.split("\",\"");
-                    if (parts.length >= 5) {
-                        try {
-                            String imageName = parts[0].replace("\"", "").trim();
-                            String pidStr = parts[1].replace("\"", "").trim();
-                            long pid = Long.parseLong(pidStr);
+                    if (parts.length < 5) continue;
 
-                            // Memory (K) -> convert to MB
-                            String memStr = parts[4].replace("\"", "").replace(",", "").replace("K", "").trim();
-                            long memoryKB = Long.parseLong(memStr);
-                            long memoryMB = memoryKB / 1024;
+                    long pid = Long.parseLong(parts[1].replace("\"", "").trim());
 
-                            String name = imageName.contains(".")
-                                    ? imageName.substring(0, imageName.lastIndexOf('.'))
-                                    : imageName;
+                    String memStr = parts[4]
+                            .replace("\"", "")
+                            .replace(",", "")
+                            .replace("K", "")
+                            .trim();
 
-                            processes.add(new ProcessInfo(pid, name, imageName, 0.0, memoryMB, -1L, Instant.EPOCH));
-                        } catch (Exception ignored) {
-                            // Skip malformed lines
-                        }
-                    }
+                    long memoryKB = Long.parseLong(memStr);
+
+                    metrics.put(pid, new ProcessMetrics(0.0, memoryKB / 1024));
                 }
             }
 
-            process.waitFor(2, TimeUnit.SECONDS);
         } catch (Exception e) {
-            System.err.println("Warning: tasklist fallback failed: " + e.getMessage());
+            System.err.println("tasklist metrics fallback failed: " + e.getMessage());
         }
 
-        return processes;
+        return metrics;
     }
 
     /**
@@ -191,5 +165,70 @@ public class ProcessScanner {
      */
     public long getOwnPid() {
         return ProcessHandle.current().pid();
+    }
+
+    private Map<Long, ProcessMetrics> scanMetricsWithPs() {
+        Map<Long, ProcessMetrics> metrics = new HashMap<>();
+
+        try {
+            Process process = new ProcessBuilder(
+                    "ps", "-axo", "pid=,rss=,%cpu="
+            ).start();
+
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream()))) {
+
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    line = line.strip();
+                    if (line.isEmpty()) continue;
+
+                    String[] parts = line.split("\\s+");
+                    if (parts.length < 3) continue;
+
+                    long pid = Long.parseLong(parts[0]);
+                    long rssKB = Long.parseLong(parts[1]);
+                    double cpu = Double.parseDouble(parts[2]);
+
+                    metrics.put(pid, new ProcessMetrics(cpu, rssKB / 1024));
+                }
+            }
+
+        } catch (Exception e) {
+            System.err.println("ps metrics fallback failed: " + e.getMessage());
+        }
+
+        return metrics;
+    }
+
+    /**
+     * Fallback to get process name for a PID using 'ps' command (macOS/Linux).
+     */
+    private ProcessInfo psLookup(long pid) {
+        if (isWindows()) return null; // Use tasklist fallback for Windows
+
+        // Return from cache if available
+        if (psNameCache.containsKey(pid)) {
+            String cachedName = psNameCache.get(pid);
+            return cachedName != null ? new ProcessInfo(pid, cachedName, "", 0.0, 0, -1L, Instant.EPOCH) : null;
+        }
+
+        try {
+            Process process = new ProcessBuilder("ps", "-p", String.valueOf(pid), "-o", "comm=").start();
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                String line = reader.readLine();
+                if (line != null && !line.isBlank()) {
+                    String name = line.strip();
+                    psNameCache.put(pid, name); // save to cache
+                    return new ProcessInfo(pid, name, "", 0.0, 0, -1L, Instant.EPOCH);
+                }
+            }
+            process.waitFor(1, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            System.err.println("psLookup failed for PID " + pid + ": " + e.getMessage());
+        }
+
+        psNameCache.put(pid, null); // mark as unknown to avoid retrying
+        return null;
     }
 }
