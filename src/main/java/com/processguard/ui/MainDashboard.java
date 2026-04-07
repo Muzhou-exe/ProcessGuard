@@ -138,7 +138,7 @@ public class MainDashboard extends Application implements ProcessListener, Alert
         ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
         executor.scheduleAtFixedRate(() -> {
             // 1. Get fresh snapshot from your ProcessMonitor / backend
-            List<ProcessInfo> latestProcesses = ProcessMonitor.getCurrentProcesses(); // <-- returns List<ProcessInfo>
+            List<ProcessInfo> latestProcesses = processMonitor.getCurrentProcesses(); // <-- returns List<ProcessInfo>
 
             // 2. Update masterData on FX thread
             Platform.runLater(() -> masterData.setAll(latestProcesses));
