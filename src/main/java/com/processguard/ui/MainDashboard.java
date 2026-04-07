@@ -339,9 +339,8 @@ public class MainDashboard extends Application implements ProcessListener, Alert
 
     @Override
     public void onExitedProcesses(List<ProcessInfo> exitedProcesses) {
-        // Optional: remove from table or update UI
         Platform.runLater(() -> {
-            processData.removeAll(exitedProcesses);
+            masterData.removeAll(exitedProcesses);
         });
     }
 
