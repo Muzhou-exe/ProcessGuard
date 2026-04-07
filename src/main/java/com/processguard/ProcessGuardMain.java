@@ -1,27 +1,29 @@
 package com.processguard;
 
 import com.processguard.core.*;
-import com.processguard.listeners.*;
+import com.processguard.ui.MainDashboard;
+import javafx.application.Application;
 
 public class ProcessGuardMain {
+
+    public static ProcessMonitor processMonitor;
+    public static AlertEngine alertEngine;
+    public static HistoryStorage historyStorage;
+
     public static void main(String[] args) {
-        AppConfig config = AppConfig.getInstance();
-        HistoryStorage storage = new HistoryStorage();
-        ProcessMonitor monitor = new ProcessMonitor(storage);
 
-        // Register observers (Observer pattern)
-        AlertEngine alertEngine = new AlertEngine(storage);
-        CustomRuleEngine customRuleEngine = new CustomRuleEngine(storage);
-        monitor.addListener(alertEngine);
-        monitor.addListener(customRuleEngine);
+        historyStorage = new HistoryStorage();
+        processMonitor = new ProcessMonitor(historyStorage);
+        alertEngine = new AlertEngine(historyStorage);
 
-        // Start all layers
-        //new MainDashboard(monitor).launch();
-        //new SystemTrayManager(monitor);
-        //new WebServer(monitor).start();
-        //new CliInterface().parse(args); // picocli support
+        processMonitor.addListener(alertEngine);
+        // any other listeners
 
-        monitor.start();
-        Runtime.getRuntime().addShutdownHook(new Thread(monitor::stop));
+        processMonitor.start();
+
+        // Launch GUI
+        Application.launch(MainDashboard.class, args);
+
+        Runtime.getRuntime().addShutdownHook(new Thread(processMonitor::stop));
     }
 }
