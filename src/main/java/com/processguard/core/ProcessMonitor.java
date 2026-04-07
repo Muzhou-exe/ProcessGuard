@@ -202,6 +202,10 @@ public class ProcessMonitor {
         return isRunning.get();
     }
 
+    public void scanNow() {
+        performScan();
+    }
+
     /**
      * Returns the number of processes in the last snapshot.
      */
