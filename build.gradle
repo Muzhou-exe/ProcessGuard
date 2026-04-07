@@ -1,0 +1,81 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'com.gradleup.shadow' version '9.4.1'
+    id 'org.openjfx.javafxplugin' version '0.1.0'
+}
+
+group = 'com.processguard'
+version = '1.6'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Core libraries
+    implementation 'com.google.code.gson:gson:2.11.0'
+    implementation 'io.javalin:javalin:6.1.6'
+    implementation 'info.picocli:picocli:4.7.7'
+
+    // JavaFX modules
+    implementation 'org.openjfx:javafx-controls:21'
+    implementation 'org.openjfx:javafx-fxml:21'
+    implementation 'org.openjfx:javafx-graphics:21'
+}
+
+javafx {
+    version = "21"
+    modules = [ 'javafx.controls', 'javafx.fxml' ]
+}
+
+application {
+    mainClass = 'com.processguard.ProcessGuardMain'
+}
+
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+// Shadow (fat jar) configuration
+tasks.shadowJar {
+    archiveBaseName.set('ProcessGuard')
+    archiveClassifier.set('')
+    archiveVersion.set(version)
+    manifest {
+        attributes 'Main-Class': application.mainClass.get()
+    }
+    // JavaFX modules are handled at runtime via launcher
+}
+
+// Ensure UTF-8 encoding
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+tasks.named('distZip') {
+    dependsOn shadowJar
+}
+
+tasks.named('distTar') {
+    dependsOn shadowJar
+}
+
+tasks.named('startScripts') {
+    dependsOn shadowJar
+}
+
+tasks.named("startShadowScripts") {
+    enabled = false
+}
+
+tasks.named('shadowDistTar') {
+    dependsOn tasks.named('jar')
+}
+
+tasks.named('shadowDistZip') {
+    dependsOn tasks.named('jar')
+}
