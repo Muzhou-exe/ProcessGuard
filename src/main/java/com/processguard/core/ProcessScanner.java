@@ -5,22 +5,14 @@ import com.processguard.models.Status;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
-import java.lang.management.ManagementFactory;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
+import java.util.concurrent.*;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
-import java.util.Set;
-import java.util.Map;
-import java.util.HashMap;
 
 /**
- * Responsible for enumerating all running system processes and returning immutable ProcessInfo snapshots.
- * Primary API: Java 9+ ProcessHandle.allProcesses()
- * Fallback for memory/CPU details: Windows tasklist command via ProcessBuilder (as specified in SDD section 2.1).
- *
- * Thread safety: Stateless — safe for concurrent calls.
+ * Responsible for enumerating system processes and building ProcessInfo snapshots.
+ * Uses Java ProcessHandle API with OS-specific fallbacks for metrics.
  */
 public class ProcessScanner {
 
@@ -34,15 +26,25 @@ public class ProcessScanner {
         }
     }
 
+    private static final String OS_WIN = "win";
+    private static final String CMD_TASKLIST = "tasklist";
+    private static final String CMD_PS = "ps";
+
+    private static final String TASKLIST_FORMAT = "csv";
+    private static final String TASKLIST_NOHEADER = "/nh";
+
+    private static final String PS_ARGS_METRICS = "-axo";
+    private static final String PS_ARGS_NAME = "-p";
+    private static final String PS_NAME_OUTPUT = "-o";
+    private static final String PS_NAME_FORMAT = "comm=";
+
     private final AppConfig config = AppConfig.getInstance();
 
-    // Cache for ps lookups: PID -> process name
-    private final Map<Long, String> psNameCache = new HashMap<>();
+    private final Map<Long, String> psNameCache = new ConcurrentHashMap<>();
 
     /**
-     * Returns a snapshot of all currently running processes.
-     *
-     * @return List of immutable ProcessInfo objects
+     * Returns snapshot of all running processes.
+     * @return list of ProcessInfo objects
      */
     public List<ProcessInfo> scanProcesses() {
         List<ProcessInfo> processes = new ArrayList<>();
@@ -59,9 +61,8 @@ public class ProcessScanner {
                         ? "unknown"
                         : executablePath.substring(executablePath.lastIndexOf(java.io.File.separator) + 1);
 
-                // Fallback if name is unknown
                 if (name.equals("unknown")) {
-                    ProcessInfo psFallback = psLookup(handle.pid());
+                    ProcessInfo psFallback = psLookup(pid);
                     name = psFallback != null ? psFallback.getName() : "unknown";
                 }
 
@@ -89,7 +90,7 @@ public class ProcessScanner {
     }
 
     /**
-     * Windows-specific fallback using 'tasklist' command for better CPU/Memory details.
+     * Windows fallback using tasklist command for process metrics.
      */
     private Map<Long, ProcessMetrics> scanMetricsWithTasklist() {
         Map<Long, ProcessMetrics> metrics = new HashMap<>();
@@ -98,7 +99,7 @@ public class ProcessScanner {
 
         try {
             Process process = new ProcessBuilder(
-                    "tasklist", "/fo", "csv", "/nh"
+                    CMD_TASKLIST, "/fo", TASKLIST_FORMAT, TASKLIST_NOHEADER
             ).start();
 
             try (BufferedReader reader = new BufferedReader(
@@ -131,48 +132,14 @@ public class ProcessScanner {
     }
 
     /**
-     * Classifies each process based on blacklist/whitelist from AppConfig.
+     * macOS/Linux fallback using ps command for process metrics.
      */
-    private void classifyProcesses(List<ProcessInfo> processes) {
-        Set<String> blacklist = config.getBlacklist();
-        Set<String> whitelist = config.getWhitelist();
-
-        for (ProcessInfo p : processes) {
-            String processName = p.getName().toLowerCase();
-
-            if (whitelist.contains(processName) || whitelist.contains(p.getExecutablePath())) {
-                p.setStatus(Status.WHITELISTED);
-            } else if (blacklist.contains(processName) || blacklist.contains(p.getExecutablePath())) {
-                p.setStatus(Status.BLOCKED);
-            } else if (p.getCpuUsage() > config.getCpuThreshold() ||
-                    p.getMemoryUsageMB() > config.getMemoryThreshold()) {
-                p.setStatus(Status.SUSPICIOUS);
-            } else {
-                p.setStatus(Status.NORMAL);
-            }
-        }
-    }
-
-    /**
-     * Checks if the current operating system is Windows.
-     */
-    private boolean isWindows() {
-        return System.getProperty("os.name").toLowerCase().contains("win");
-    }
-
-    /**
-     * Returns the current process ID of ProcessGuard itself (useful for self-exclusion if needed).
-     */
-    public long getOwnPid() {
-        return ProcessHandle.current().pid();
-    }
-
     private Map<Long, ProcessMetrics> scanMetricsWithPs() {
         Map<Long, ProcessMetrics> metrics = new HashMap<>();
 
         try {
             Process process = new ProcessBuilder(
-                    "ps", "-axo", "pid=,rss=,%cpu="
+                    CMD_PS, "-axo", "pid=,rss=,%cpu="
             ).start();
 
             try (BufferedReader reader = new BufferedReader(
@@ -202,33 +169,77 @@ public class ProcessScanner {
     }
 
     /**
-     * Fallback to get process name for a PID using 'ps' command (macOS/Linux).
+     * Classifies processes using whitelist/blacklist and thresholds.
+     */
+    private void classifyProcesses(List<ProcessInfo> processes) {
+        Set<String> blacklist = config.getBlacklist();
+        Set<String> whitelist = config.getWhitelist();
+
+        for (ProcessInfo p : processes) {
+            String processName = p.getName().toLowerCase();
+
+            if (whitelist.contains(processName) || whitelist.contains(p.getExecutablePath())) {
+                p.setStatus(Status.WHITELISTED);
+            } else if (blacklist.contains(processName) || blacklist.contains(p.getExecutablePath())) {
+                p.setStatus(Status.BLOCKED);
+            } else if (p.getCpuUsage() > config.getCpuThreshold()
+                    || p.getMemoryUsageMB() > config.getMemoryThreshold()) {
+                p.setStatus(Status.SUSPICIOUS);
+            } else {
+                p.setStatus(Status.NORMAL);
+            }
+        }
+    }
+
+    /**
+     * Checks whether OS is Windows.
+     */
+    private boolean isWindows() {
+        return System.getProperty("os.name").toLowerCase().contains(OS_WIN);
+    }
+
+    /**
+     * Returns PID of the current application process.
+     * @return current process ID
+     */
+    public long getOwnPid() {
+        return ProcessHandle.current().pid();
+    }
+
+    /**
+     * Looks up process name using ps command (macOS/Linux).
      */
     private ProcessInfo psLookup(long pid) {
-        if (isWindows()) return null; // Use tasklist fallback for Windows
+        if (isWindows()) return null;
 
-        // Return from cache if available
         if (psNameCache.containsKey(pid)) {
             String cachedName = psNameCache.get(pid);
-            return cachedName != null ? new ProcessInfo(pid, cachedName, "", 0.0, 0, -1L, Instant.EPOCH) : null;
+            return cachedName != null
+                    ? new ProcessInfo(pid, cachedName, "", 0.0, 0, -1L, Instant.EPOCH)
+                    : null;
         }
 
         try {
-            Process process = new ProcessBuilder("ps", "-p", String.valueOf(pid), "-o", "comm=").start();
+            Process process = new ProcessBuilder(
+                    CMD_PS, PS_ARGS_NAME, String.valueOf(pid), PS_NAME_OUTPUT, PS_NAME_FORMAT
+            ).start();
+
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
                 String line = reader.readLine();
                 if (line != null && !line.isBlank()) {
                     String name = line.strip();
-                    psNameCache.put(pid, name); // save to cache
+                    psNameCache.put(pid, name);
                     return new ProcessInfo(pid, name, "", 0.0, 0, -1L, Instant.EPOCH);
                 }
             }
+
             process.waitFor(1, TimeUnit.SECONDS);
+
         } catch (Exception e) {
             System.err.println("psLookup failed for PID " + pid + ": " + e.getMessage());
         }
 
-        psNameCache.put(pid, null); // mark as unknown to avoid retrying
+        psNameCache.put(pid, null);
         return null;
     }
 }
