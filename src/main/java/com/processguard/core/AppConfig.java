@@ -31,7 +31,7 @@ public class AppConfig {
 
     // Configuration fields as defined in the SDD
     private int scanIntervalSeconds = 3;
-    private double cpuThreshold = 80.0;
+    private double cpuThreshold = 20.0;
     private double memoryThreshold = 500.0;
     private final Set<String> blacklist = new HashSet<>();
     private final Set<String> whitelist = new HashSet<>();
