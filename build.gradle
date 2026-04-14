@@ -1,4 +1,4 @@
-plugins {
+plugiplugins {
     id 'java'
     id 'application'
     id 'com.gradleup.shadow' version '9.4.1'
@@ -22,6 +22,14 @@ dependencies {
     implementation 'org.openjfx:javafx-controls:21'
     implementation 'org.openjfx:javafx-fxml:21'
     implementation 'org.openjfx:javafx-graphics:21'
+
+    // Testing
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+    useJUnitPlatform()
 }
 
 javafx {
@@ -32,7 +40,6 @@ javafx {
 application {
     mainClass = 'com.processguard.ProcessGuardMain'
 }
-
 
 java {
     toolchain {
@@ -48,7 +55,10 @@ tasks.shadowJar {
     manifest {
         attributes 'Main-Class': application.mainClass.get()
     }
-    // JavaFX modules are handled at runtime via launcher
+}
+
+tasks.named('startShadowScripts') {
+    dependsOn(tasks.named('jar'))
 }
 
 // Ensure UTF-8 encoding
@@ -56,6 +66,7 @@ tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
 }
 
+// Make distribution tasks depend on shadowJar
 tasks.named('distZip') {
     dependsOn shadowJar
 }
@@ -79,3 +90,4 @@ tasks.named('shadowDistTar') {
 tasks.named('shadowDistZip') {
     dependsOn tasks.named('jar')
 }
+

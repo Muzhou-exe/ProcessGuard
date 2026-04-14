@@ -53,6 +53,7 @@ import javafx.beans.binding.Bindings;
 // Java standard library
 import java.time.Instant;
 import java.time.ZoneId;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Comparator;
@@ -72,7 +73,7 @@ public class MainDashboard extends Application implements ProcessListener, Alert
     private ObservableList<AlertEvent> alertData;
     ObservableList<ProcessInfo> masterData;
 
-    private Label scanIntervalLabel, totalProcessesLabel, lastScanLabel, cpuSummaryLabel, memSummaryLabel;
+    private Label scanIntervalLabel, totalProcessesLabel, lastScanLabel, cpuSummaryLabel, memSummaryLabel, detailsLabel;
 
     private ProcessMonitor processMonitor;
     private AlertEngine alertEngine;
@@ -85,7 +86,24 @@ public class MainDashboard extends Application implements ProcessListener, Alert
     @Override
     public void start(Stage primaryStage) {
 
-        // --- Top Toolbar ---
+        // Register backend references FIRST
+        this.historyStorage = ProcessGuardMain.historyStorage;
+        this.processMonitor = ProcessGuardMain.processMonitor;
+        this.alertEngine = ProcessGuardMain.alertEngine;
+
+        // =========================
+        // TABLE SETUP
+        // =========================
+        processTable = new TableView<>();
+        masterData = FXCollections.observableArrayList();
+
+        SortedList<ProcessInfo> sortedData = new SortedList<>(masterData);
+        sortedData.comparatorProperty().bind(processTable.comparatorProperty());
+        processTable.setItems(sortedData);
+
+        // =========================
+        // TOOLBAR FIRST
+        // =========================
         ToolBar toolbar = new ToolBar();
         Button btnStart = new Button("Start Monitoring");
         Button btnStop = new Button("Stop Monitoring");
@@ -94,59 +112,41 @@ public class MainDashboard extends Application implements ProcessListener, Alert
         Button btnExport = new Button("Export Report");
 
         btnStart.setOnAction(e -> {
-            if (!processMonitor.isRunning()) {
+            if (processMonitor != null && !processMonitor.isRunning()) {
                 processMonitor.start();
             }
         });
 
         btnStop.setOnAction(e -> {
-            if (processMonitor.isRunning()) {
+            if (processMonitor != null && processMonitor.isRunning()) {
                 processMonitor.stop();
             }
         });
 
-        btnRefresh.setOnAction(e -> processMonitor.scanNow());
+        btnRefresh.setOnAction(e -> {
+            if (processMonitor != null) {
+                processMonitor.scanNow();
+            }
+        });
 
-        btnStart.disableProperty().bind(
-                Bindings.createBooleanBinding(
-                        () -> processMonitor.isRunning()
-                )
+        toolbar.getItems().addAll(
+                btnStart, btnStop, btnRefresh, btnConfig, btnExport
         );
 
-        btnStop.disableProperty().bind(
-                Bindings.createBooleanBinding(
-                        () -> !processMonitor.isRunning()
-                )
-        );
+        // =========================
+        // COLUMNS
+        // =========================
+        String[] colNames = {
+                "PID", "Process Name", "Executable Path",
+                "CPU %", "Memory MB", "Status",
+                "Parent PID", "Start Time", "Captured At"
+        };
 
-        toolbar.getItems().addAll(btnStart, btnStop, btnRefresh, btnConfig, btnExport);
-
-        // --- Table Setup ---
-        processTable = new TableView<>();
-
-        // 1. Master list
-        masterData = FXCollections.observableArrayList();
-
-        // 2. Wrap in SortedList
-        SortedList<ProcessInfo> sortedData = new SortedList<>(masterData);
-        sortedData.comparatorProperty().bind(processTable.comparatorProperty());
-
-        // 3. Assign TableView
-        processTable.setItems(sortedData);
-
-        // --- Background updater ---
-        ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
-        executor.scheduleAtFixedRate(() -> {
-            // 1. Get fresh snapshot from your ProcessMonitor / backend
-            List<ProcessInfo> latestProcesses = processMonitor.getCurrentProcesses(); // <-- returns List<ProcessInfo>
-
-            // 2. Update masterData on FX thread
-            Platform.runLater(() -> masterData.setAll(latestProcesses));
-        }, 0, 1, TimeUnit.SECONDS);
-
-        // --- Columns ---
-        String[] colNames = {"PID", "Process Name", "Executable Path", "CPU %", "Memory MB", "Status", "Parent PID", "Start Time", "Captured At"};
-        String[] propertyNames = {"pid", "name", "executablePath", "cpuUsage", "memoryUsageMB", "status", "parentPid", "startTime", "capturedAt"};
+        String[] propertyNames = {
+                "pid", "name", "executablePath",
+                "cpuUsage", "memoryUsageMB", "status",
+                "parentPid", "startTime", "capturedAt"
+        };
 
         Map<String, TableColumn<ProcessInfo, ?>> columnMap = new HashMap<>();
 
@@ -162,12 +162,14 @@ public class MainDashboard extends Application implements ProcessListener, Alert
                         @Override
                         protected void updateItem(Double item, boolean empty) {
                             super.updateItem(item, empty);
-                            setText(empty || item == null ? "" : String.format("%.1f %%", item));
+                            setText(empty || item == null ? "" :
+                                    String.format("%.1f %%", item));
                         }
                     });
                     col.setComparator(Double::compare);
                     columnMap.put(prop, col);
                 }
+
                 case "memoryUsageMB" -> {
                     TableColumn<ProcessInfo, Long> col = new TableColumn<>(name);
                     col.setCellValueFactory(new PropertyValueFactory<>("memoryUsageMB"));
@@ -181,21 +183,7 @@ public class MainDashboard extends Application implements ProcessListener, Alert
                     col.setComparator(Long::compare);
                     columnMap.put(prop, col);
                 }
-                case "startTime", "capturedAt" -> {
-                    TableColumn<ProcessInfo, Instant> col = new TableColumn<>(name);
-                    col.setCellValueFactory(new PropertyValueFactory<>(prop));
-                    col.setCellFactory(tc -> new TableCell<>() {
-                        @Override
-                        protected void updateItem(Instant item, boolean empty) {
-                            super.updateItem(item, empty);
-                            setText(empty || item == null ? "" :
-                                    DateTimeFormatter.ofPattern("HH:mm:ss")
-                                            .withZone(ZoneId.systemDefault())
-                                            .format(item));
-                        }
-                    });
-                    columnMap.put(prop, col);
-                }
+
                 default -> {
                     TableColumn<ProcessInfo, Object> col = new TableColumn<>(name);
                     col.setCellValueFactory(new PropertyValueFactory<>(prop));
@@ -204,77 +192,139 @@ public class MainDashboard extends Application implements ProcessListener, Alert
             }
         }
 
-        // Add columns in desired order
-        processTable.getColumns().clear();
-        String[] desiredOrder = {"pid", "name", "cpuUsage", "memoryUsageMB", "status", "executablePath", "parentPid", "startTime", "capturedAt"};
-        for (String key : desiredOrder) {
-            if (columnMap.containsKey(key)) processTable.getColumns().add(columnMap.get(key));
-        }
+        processTable.getColumns().addAll(columnMap.values());
 
-        // --- Default Sorting ---
-        TableColumn<ProcessInfo, Double> cpuCol = (TableColumn<ProcessInfo, Double>) columnMap.get("cpuUsage");
-        TableColumn<ProcessInfo, Long> memCol = (TableColumn<ProcessInfo, Long>) columnMap.get("memoryUsageMB");
+        // Default sorting
+        TableColumn<ProcessInfo, Double> cpuCol =
+                (TableColumn<ProcessInfo, Double>) columnMap.get("cpuUsage");
 
-        if (cpuCol != null && memCol != null) {
+        if (cpuCol != null) {
             cpuCol.setSortType(TableColumn.SortType.DESCENDING);
-            memCol.setSortType(TableColumn.SortType.DESCENDING);
-            processTable.getSortOrder().clear();
             processTable.getSortOrder().add(cpuCol);
-            processTable.getSortOrder().add(memCol);
             processTable.sort();
         }
 
-        // --- Row highlighting ---
-        processTable.setRowFactory(tv -> new TableRow<ProcessInfo>() {
+        // =========================
+        // ROW HIGHLIGHTING
+        // =========================
+        processTable.setRowFactory(tv -> new TableRow<>() {
             @Override
             protected void updateItem(ProcessInfo item, boolean empty) {
                 super.updateItem(item, empty);
-                setStyle(""); // reset
+                setStyle("");
 
                 if (item == null || empty) return;
 
-                // Thresholds
                 double cpuThreshold = AppConfig.getInstance().getCpuThreshold();
                 double memThreshold = AppConfig.getInstance().getMemoryThreshold();
 
-                // Determine effective status (without mutating)
                 Status effectiveStatus = item.getStatus();
-                if (effectiveStatus != Status.BLOCKED && effectiveStatus != Status.SUSPICIOUS) {
-                    if (item.getCpuUsage() > cpuThreshold || item.getMemoryUsageMB() > memThreshold) {
-                        effectiveStatus = Status.SUSPICIOUS;
-                    } else {
-                        effectiveStatus = Status.NORMAL;
-                    }
+
+                if (effectiveStatus == Status.NORMAL &&
+                        (item.getCpuUsage() > cpuThreshold ||
+                                item.getMemoryUsageMB() > memThreshold)) {
+                    effectiveStatus = Status.SUSPICIOUS;
                 }
 
-                // Apply highlighting
                 switch (effectiveStatus) {
-                    case BLOCKED -> setStyle("-fx-background-color: rgba(255,0,0,0.3)");
-                    case SUSPICIOUS -> setStyle("-fx-background-color: rgba(255,255,0,0.3)");
-                    case NORMAL -> setStyle("");
+                    case BLOCKED ->
+                            setStyle("-fx-background-color: rgba(255,0,0,0.3)");
+                    case SUSPICIOUS ->
+                            setStyle("-fx-background-color: rgba(255,255,0,0.3)");
                 }
             }
         });
 
-        // --- Right Sidebar: Alert Dashboard ---
+        processTable.getSelectionModel().selectedItemProperty().addListener(
+                (obs, oldVal, selected) -> {
+                    if (selected == null) {
+                        detailsLabel.setText("Select a process from the table...");
+                        return;
+                    }
+
+                    detailsLabel.setText(String.format("""
+                    PID: %d
+                    Name: %s
+                    Path: %s
+                    CPU: %.1f%%
+                    Memory: %d MB
+                    Parent PID: %d
+                    Start: %s
+                    Captured: %s
+                    Status: %s
+                    """,
+                            selected.getPid(),
+                            selected.getName(),
+                            selected.getExecutablePath(),
+                            selected.getCpuUsage(),
+                            selected.getMemoryUsageMB(),
+                            selected.getParentPid(),
+                            selected.getStartTime(),
+                            selected.getCapturedAt(),
+                            selected.getStatus()
+                    ));
+                }
+        );
+
+        // =========================
+        // ALERT + DETAILS SIDEBAR
+        // =========================
         alertList = new ListView<>();
         alertData = FXCollections.observableArrayList();
         alertList.setItems(alertData);
-        VBox alertSidebar = new VBox(new Label("Alerts"), alertList);
-        alertSidebar.setPrefWidth(300);
-        alertSidebar.setPadding(new Insets(5));
 
-        // --- Bottom Status Bar ---
+        Label alertsTitle = new Label("Alerts");
+        alertsTitle.setStyle("-fx-font-weight: bold;");
+
+        Label detailsTitle = new Label("Process Details");
+        detailsTitle.setStyle("-fx-font-weight: bold;");
+
+        detailsLabel = new Label("Select a process from the table...");
+        detailsLabel.setWrapText(true);
+        detailsLabel.setPadding(new Insets(10));
+        detailsLabel.setStyle("""
+            -fx-font-family: monospace;
+            -fx-border-color: lightgray;
+            -fx-border-width: 1;
+            -fx-background-color: #fafafa;
+        """);
+        detailsLabel.setPrefHeight(250);
+
+        VBox alertSidebar = new VBox(
+                10,
+                alertsTitle,
+                alertList,
+                detailsTitle,
+                detailsLabel
+        );
+
+        VBox.setVgrow(alertList, Priority.ALWAYS);
+        alertSidebar.setPrefWidth(320);
+        alertSidebar.setPadding(new Insets(10));
+
+        // =========================
+        // STATUS BAR
+        // =========================
         HBox statusBar = new HBox(10);
         statusBar.setPadding(new Insets(5));
+
         scanIntervalLabel = new Label("Scan Interval: 3s");
         totalProcessesLabel = new Label("Processes: 0");
         lastScanLabel = new Label("Last Scan: N/A");
         cpuSummaryLabel = new Label("CPU: 0%");
         memSummaryLabel = new Label("Memory: 0MB");
-        statusBar.getChildren().addAll(scanIntervalLabel, totalProcessesLabel, lastScanLabel, cpuSummaryLabel, memSummaryLabel);
 
-        // --- Main Layout ---
+        statusBar.getChildren().addAll(
+                scanIntervalLabel,
+                totalProcessesLabel,
+                lastScanLabel,
+                cpuSummaryLabel,
+                memSummaryLabel
+        );
+
+        // =========================
+        // MAIN LAYOUT
+        // =========================
         BorderPane root = new BorderPane();
         root.setTop(toolbar);
         root.setCenter(processTable);
@@ -285,11 +335,6 @@ public class MainDashboard extends Application implements ProcessListener, Alert
         primaryStage.setScene(scene);
         primaryStage.setTitle("ProcessGuard v1.6 – Live Process Monitor");
         primaryStage.show();
-
-        // Register with Observers
-        this.historyStorage = ProcessGuardMain.historyStorage;
-        this.processMonitor = ProcessGuardMain.processMonitor;
-        this.alertEngine = ProcessGuardMain.alertEngine;
 
         processMonitor.addListener(this);
         alertEngine.addAlertListener(this);
@@ -304,17 +349,14 @@ public class MainDashboard extends Application implements ProcessListener, Alert
     @Override
     public void onSnapshotUpdate(List<ProcessInfo> snapshot) {
         Platform.runLater(() -> {
-            // Update table data
+
+            // Update live table
             masterData.setAll(snapshot);
 
-            // --- Bottom bar updates ---
+            // =========================
+            // Bottom bar metrics
+            // =========================
             totalProcessesLabel.setText("Processes: " + snapshot.size());
-            lastScanLabel.setText(
-                    "Last Scan: " +
-                            DateTimeFormatter.ofPattern("HH:mm:ss")
-                                    .withZone(ZoneId.systemDefault())
-                                    .format(Instant.now())
-            );
 
             double totalCpu = snapshot.stream()
                     .mapToDouble(ProcessInfo::getCpuUsage)
@@ -324,8 +366,39 @@ public class MainDashboard extends Application implements ProcessListener, Alert
                     .mapToLong(ProcessInfo::getMemoryUsageMB)
                     .sum();
 
-            cpuSummaryLabel.setText(String.format("CPU: %.1f %%", totalCpu));
-            memSummaryLabel.setText("Memory: " + totalMem + " MB");
+            long suspiciousCount = snapshot.stream()
+                    .filter(p ->
+                            p.getStatus() == Status.SUSPICIOUS ||
+                                    p.getCpuUsage() > AppConfig.getInstance().getCpuThreshold() ||
+                                    p.getMemoryUsageMB() > AppConfig.getInstance().getMemoryThreshold()
+                    )
+                    .count();
+
+            long blockedCount = snapshot.stream()
+                    .filter(p -> p.getStatus() == Status.BLOCKED)
+                    .count();
+
+            cpuSummaryLabel.setText(String.format(
+                    "CPU: %.1f%%", totalCpu
+            ));
+
+            memSummaryLabel.setText(
+                    "Memory: " + totalMem + " MB"
+            );
+
+            lastScanLabel.setText(
+                    "Last Scan: " +
+                            DateTimeFormatter.ofPattern("HH:mm:ss")
+                                    .format(LocalTime.now())
+            );
+
+            scanIntervalLabel.setText(
+                    String.format(
+                            "Suspicious: %d | Blocked: %d",
+                            suspiciousCount,
+                            blockedCount
+                    )
+            );
         });
     }
 
@@ -347,7 +420,7 @@ public class MainDashboard extends Application implements ProcessListener, Alert
     @Override
     public void onNewProcesses(List<ProcessInfo> newProcesses) {
         Platform.runLater(() -> {
-            processData.addAll(newProcesses);
+            masterData.addAll(newProcesses);
         });
     }
 }
