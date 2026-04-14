@@ -206,7 +206,6 @@ public class ProcessMonitor {
         performScan();
     }
 
-
     /**
      * Returns the number of processes in the last snapshot.
      */
