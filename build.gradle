@@ -57,6 +57,10 @@ tasks.shadowJar {
     }
 }
 
+tasks.named('startShadowScripts') {
+    dependsOn(tasks.named('jar'))
+}
+
 // Ensure UTF-8 encoding
 tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
@@ -86,3 +90,4 @@ tasks.named('shadowDistTar') {
 tasks.named('shadowDistZip') {
     dependsOn tasks.named('jar')
 }
+

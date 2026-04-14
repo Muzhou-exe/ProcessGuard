@@ -73,7 +73,7 @@ public class MainDashboard extends Application implements ProcessListener, Alert
     private ObservableList<AlertEvent> alertData;
     ObservableList<ProcessInfo> masterData;
 
-    private Label scanIntervalLabel, totalProcessesLabel, lastScanLabel, cpuSummaryLabel, memSummaryLabel;
+    private Label scanIntervalLabel, totalProcessesLabel, lastScanLabel, cpuSummaryLabel, memSummaryLabel, detailsLabel;
 
     private ProcessMonitor processMonitor;
     private AlertEngine alertEngine;
@@ -235,16 +235,72 @@ public class MainDashboard extends Application implements ProcessListener, Alert
             }
         });
 
+        processTable.getSelectionModel().selectedItemProperty().addListener(
+                (obs, oldVal, selected) -> {
+                    if (selected == null) {
+                        detailsLabel.setText("Select a process from the table...");
+                        return;
+                    }
+
+                    detailsLabel.setText(String.format("""
+                    PID: %d
+                    Name: %s
+                    Path: %s
+                    CPU: %.1f%%
+                    Memory: %d MB
+                    Parent PID: %d
+                    Start: %s
+                    Captured: %s
+                    Status: %s
+                    """,
+                            selected.getPid(),
+                            selected.getName(),
+                            selected.getExecutablePath(),
+                            selected.getCpuUsage(),
+                            selected.getMemoryUsageMB(),
+                            selected.getParentPid(),
+                            selected.getStartTime(),
+                            selected.getCapturedAt(),
+                            selected.getStatus()
+                    ));
+                }
+        );
+
         // =========================
-        // ALERT SIDEBAR
+        // ALERT + DETAILS SIDEBAR
         // =========================
         alertList = new ListView<>();
         alertData = FXCollections.observableArrayList();
         alertList.setItems(alertData);
 
-        VBox alertSidebar = new VBox(new Label("Alerts"), alertList);
-        alertSidebar.setPrefWidth(300);
-        alertSidebar.setPadding(new Insets(5));
+        Label alertsTitle = new Label("Alerts");
+        alertsTitle.setStyle("-fx-font-weight: bold;");
+
+        Label detailsTitle = new Label("Process Details");
+        detailsTitle.setStyle("-fx-font-weight: bold;");
+
+        detailsLabel = new Label("Select a process from the table...");
+        detailsLabel.setWrapText(true);
+        detailsLabel.setPadding(new Insets(10));
+        detailsLabel.setStyle("""
+            -fx-font-family: monospace;
+            -fx-border-color: lightgray;
+            -fx-border-width: 1;
+            -fx-background-color: #fafafa;
+        """);
+        detailsLabel.setPrefHeight(250);
+
+        VBox alertSidebar = new VBox(
+                10,
+                alertsTitle,
+                alertList,
+                detailsTitle,
+                detailsLabel
+        );
+
+        VBox.setVgrow(alertList, Priority.ALWAYS);
+        alertSidebar.setPrefWidth(320);
+        alertSidebar.setPadding(new Insets(10));
 
         // =========================
         // STATUS BAR
@@ -364,7 +420,7 @@ public class MainDashboard extends Application implements ProcessListener, Alert
     @Override
     public void onNewProcesses(List<ProcessInfo> newProcesses) {
         Platform.runLater(() -> {
-            processData.addAll(newProcesses);
+            masterData.addAll(newProcesses);
         });
     }
 }
