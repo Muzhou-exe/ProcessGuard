@@ -11,6 +11,7 @@ import com.processguard.core.AlertEngine;
 import com.processguard.core.HistoryStorage;
 import com.processguard.models.Status;
 import com.processguard.core.AppConfig;
+import com.processguard.core.ProcessKiller;
 
 // JavaFX imports
 import javafx.application.Application;
@@ -41,6 +42,10 @@ import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.control.ToolBar;
+import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.ContextMenu;
+import javafx.scene.control.MenuItem;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.WindowEvent;
@@ -78,6 +83,11 @@ public class MainDashboard extends Application implements ProcessListener, Alert
     private ProcessMonitor processMonitor;
     private AlertEngine alertEngine;
     private HistoryStorage historyStorage;
+
+    private ProcessInfo selectedProcess;
+    private Button killButton;
+
+    private VBox alertSidebar;
 
     public static void main(String[] args) {
         launch(args);
@@ -207,40 +217,97 @@ public class MainDashboard extends Application implements ProcessListener, Alert
         // =========================
         // ROW HIGHLIGHTING
         // =========================
-        processTable.setRowFactory(tv -> new TableRow<>() {
-            @Override
-            protected void updateItem(ProcessInfo item, boolean empty) {
-                super.updateItem(item, empty);
-                setStyle("");
+        processTable.setRowFactory(tv -> {
+            TableRow<ProcessInfo> row = new TableRow<>();
 
-                if (item == null || empty) return;
+            ContextMenu contextMenu = new ContextMenu();
 
-                double cpuThreshold = AppConfig.getInstance().getCpuThreshold();
-                double memThreshold = AppConfig.getInstance().getMemoryThreshold();
+            MenuItem killItem = new MenuItem("Kill Process");
+            MenuItem copyPidItem = new MenuItem("Copy PID");
+            MenuItem detailsItem = new MenuItem("View Details");
 
-                Status effectiveStatus = item.getStatus();
+            // =========================
+            // KILL PROCESS
+            // =========================
+            killItem.setOnAction(e -> {
+                ProcessInfo p = row.getItem();
+                if (p == null) return;
 
-                if (effectiveStatus == Status.NORMAL &&
-                        (item.getCpuUsage() > cpuThreshold ||
-                                item.getMemoryUsageMB() > memThreshold)) {
-                    effectiveStatus = Status.SUSPICIOUS;
+                Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+                confirm.setTitle("Confirm Kill");
+                confirm.setHeaderText("Kill Process");
+                confirm.setContentText(
+                        "Kill " + p.getName() + " (PID " + p.getPid() + ")?"
+                );
+
+                Optional<ButtonType> result = confirm.showAndWait();
+
+                if (result.isEmpty() || result.get() != ButtonType.OK) return;
+
+                new Thread(() -> ProcessKiller.kill(p.getPid())).start();
+            });
+
+            // =========================
+            // COPY PID
+            // =========================
+            copyPidItem.setOnAction(e -> {
+                ProcessInfo p = row.getItem();
+                if (p == null) return;
+
+                javafx.scene.input.Clipboard clipboard =
+                        javafx.scene.input.Clipboard.getSystemClipboard();
+                javafx.scene.input.ClipboardContent content =
+                        new javafx.scene.input.ClipboardContent();
+
+                content.putString(String.valueOf(p.getPid()));
+                clipboard.setContent(content);
+            });
+
+            // =========================
+            // VIEW DETAILS
+            // =========================
+            detailsItem.setOnAction(e -> {
+                ProcessInfo p = row.getItem();
+                if (p == null) return;
+
+                selectedProcess = p;
+
+                detailsLabel.setText(
+                        "PID: " + p.getPid() + "\n" +
+                                "Name: " + p.getName() + "\n" +
+                                "CPU: " + p.getCpuUsage() + "%\n" +
+                                "Memory: " + p.getMemoryUsageMB() + " MB\n" +
+                                "Status: " + p.getStatus() + "\n" +
+                                "Path: " + p.getExecutablePath()
+                );
+
+                killButton.setDisable(false);
+            });
+
+            contextMenu.getItems().addAll(killItem, copyPidItem, detailsItem);
+
+            // Show menu only for non-empty rows
+            row.setOnContextMenuRequested(e -> {
+                if (!row.isEmpty()) {
+                    contextMenu.show(row, e.getScreenX(), e.getScreenY());
                 }
+            });
 
-                switch (effectiveStatus) {
-                    case BLOCKED ->
-                            setStyle("-fx-background-color: rgba(255,0,0,0.3)");
-                    case SUSPICIOUS ->
-                            setStyle("-fx-background-color: rgba(255,255,0,0.3)");
-                }
-            }
+            return row;
         });
 
         processTable.getSelectionModel().selectedItemProperty().addListener(
                 (obs, oldVal, selected) -> {
+
+                    selectedProcess = selected;
+
                     if (selected == null) {
+                        killButton.setDisable(true);
                         detailsLabel.setText("Select a process from the table...");
                         return;
                     }
+
+                    killButton.setDisable(false);
 
                     detailsLabel.setText(String.format("""
                     PID: %d
@@ -249,8 +316,6 @@ public class MainDashboard extends Application implements ProcessListener, Alert
                     CPU: %.1f%%
                     Memory: %d MB
                     Parent PID: %d
-                    Start: %s
-                    Captured: %s
                     Status: %s
                     """,
                             selected.getPid(),
@@ -259,8 +324,6 @@ public class MainDashboard extends Application implements ProcessListener, Alert
                             selected.getCpuUsage(),
                             selected.getMemoryUsageMB(),
                             selected.getParentPid(),
-                            selected.getStartTime(),
-                            selected.getCapturedAt(),
                             selected.getStatus()
                     ));
                 }
@@ -269,6 +332,7 @@ public class MainDashboard extends Application implements ProcessListener, Alert
         // =========================
         // ALERT + DETAILS SIDEBAR
         // =========================
+
         alertList = new ListView<>();
         alertData = FXCollections.observableArrayList();
         alertList.setItems(alertData);
@@ -290,15 +354,72 @@ public class MainDashboard extends Application implements ProcessListener, Alert
         """);
         detailsLabel.setPrefHeight(250);
 
-        VBox alertSidebar = new VBox(
+        // Kill button
+        killButton = new Button("Kill Process");
+        killButton.setDisable(true);
+
+        killButton.setStyle("""
+            -fx-background-color: #ff4d4d;
+            -fx-text-fill: white;
+            -fx-font-weight: bold;
+        """);
+
+        killButton.setOnAction(e -> {
+            if (selectedProcess == null) return;
+
+            long pid = selectedProcess.getPid();
+            String name = selectedProcess.getName();
+
+            // =========================
+            // CONFIRMATION DIALOG
+            // =========================
+            Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+            confirm.setTitle("Confirm Process Kill");
+            confirm.setHeaderText("Terminate Process?");
+            confirm.setContentText(
+                    "Are you sure you want to kill:\n\n" +
+                            name + " (PID " + pid + ")?\n\n" +
+                            "This action cannot be undone."
+            );
+
+            Optional<ButtonType> result = confirm.showAndWait();
+
+            if (result.isEmpty() || result.get() != ButtonType.OK) {
+                return; // user cancelled
+            }
+
+            killButton.setDisable(true);
+
+            // =========================
+            // KILL PROCESS (background thread)
+            // =========================
+            new Thread(() -> {
+                boolean success = ProcessKiller.kill(pid);
+
+                Platform.runLater(() -> {
+                    if (success) {
+                        detailsLabel.setText(detailsLabel.getText()
+                                + "\n\n Process killed successfully");
+                    } else {
+                        detailsLabel.setText(detailsLabel.getText()
+                                + "\n\n Failed to kill process");
+                    }
+
+                    selectedProcess = null;
+                    killButton.setDisable(true);
+                });
+            }).start();
+        });
+
+        alertSidebar = new VBox(
                 10,
                 alertsTitle,
                 alertList,
                 detailsTitle,
-                detailsLabel
+                detailsLabel,
+                killButton
         );
 
-        VBox.setVgrow(alertList, Priority.ALWAYS);
         alertSidebar.setPrefWidth(320);
         alertSidebar.setPadding(new Insets(10));
 
