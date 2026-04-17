@@ -1,10 +1,5 @@
 # ProcessGuard - User Guide
 
-**Version:** 1.6  
-**Date:** April 2026  
-**Project:** ProcessGuard — Desktop System Process Monitor  
-**Team:** Group 5
-
 ---
 
 ## Table of Contents
