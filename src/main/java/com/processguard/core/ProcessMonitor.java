@@ -65,8 +65,6 @@ public class ProcessMonitor {
             int interval = config.getScanIntervalSeconds();
 
             scheduler.scheduleAtFixedRate(this::performScan, 0, interval, TimeUnit.SECONDS);
-
-            System.out.println("ProcessMonitor started with scan interval: " + interval + " seconds.");
         }
     }
 
@@ -86,7 +84,6 @@ public class ProcessMonitor {
                     scheduler.shutdownNow();
                 }
             }
-            System.out.println("ProcessMonitor stopped.");
         }
     }
 
@@ -112,18 +109,10 @@ public class ProcessMonitor {
                 historyStorage.saveSnapshot(currentSnapshot);
             }
 
-            // System print tests in lieu of UI to be removed
-            System.out.println("\n=== SCAN CYCLE ===");
-            System.out.println("Processes: " + currentSnapshot.size());
-
             List<ProcessInfo> sorted = currentSnapshot.stream()
                     .sorted((a, b) -> Long.compare(b.getMemoryUsageMB(), a.getMemoryUsageMB()))
                     .limit(20)
                     .toList();
-
-            for (ProcessInfo p : sorted) {
-                System.out.println(p);
-            }
 
         } catch (Exception e) {
             System.err.println("Error during process scan cycle: " + e.getMessage());

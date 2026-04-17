@@ -67,18 +67,22 @@ public class AppConfig {
         try {
             if (Files.exists(configPath)) {
                 String json = Files.readString(configPath);
-                AppConfig loaded = gson.fromJson(json, AppConfig.class);
+                ConfigState loaded = gson.fromJson(json, ConfigState.class);
                 if (loaded != null) {
                     this.scanIntervalSeconds = loaded.scanIntervalSeconds;
                     this.cpuThreshold = loaded.cpuThreshold;
                     this.memoryThreshold = loaded.memoryThreshold;
+
                     this.blacklist.clear();
                     this.blacklist.addAll(loaded.blacklist);
+
                     this.whitelist.clear();
                     this.whitelist.addAll(loaded.whitelist);
+
                     this.webPort = loaded.webPort;
                     this.startMinimized = loaded.startMinimized;
                     this.enableSystemTray = loaded.enableSystemTray;
+
                     this.customRules.clear();
                     this.customRules.addAll(loaded.customRules);
                 }
@@ -98,7 +102,19 @@ public class AppConfig {
     public void saveConfig() {
         try {
             Files.createDirectories(configPath.getParent());
-            String json = gson.toJson(this);
+            ConfigState state = new ConfigState();
+
+            state.scanIntervalSeconds = scanIntervalSeconds;
+            state.cpuThreshold = cpuThreshold;
+            state.memoryThreshold = memoryThreshold;
+            state.blacklist = blacklist;
+            state.whitelist = whitelist;
+            state.webPort = webPort;
+            state.startMinimized = startMinimized;
+            state.enableSystemTray = enableSystemTray;
+            state.customRules = customRules;
+
+            String json = gson.toJson(state);
             Files.writeString(configPath, json);
         } catch (Exception e) {
             System.err.println("Error: Failed to save configuration. " + e.getMessage());

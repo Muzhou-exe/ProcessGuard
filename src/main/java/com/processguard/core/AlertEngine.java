@@ -115,7 +115,6 @@ public class AlertEngine implements ProcessListener {
                 historyStorage.saveAlert(alert);
             }
 
-            System.out.println("[ALERT] " + alert);
         }
 
         // clear inactive alerts only when process is NORMAL
