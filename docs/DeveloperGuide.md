@@ -251,7 +251,7 @@ This keeps `MainDashboard` focused on lifecycle management and observer routing.
                                             │  «enum»      │
 ┌──────────────────┐    ┌──────────────┐    │  LOG_ONLY    │
 │ HistoryStorage   │    │ReportExporter│    │  ALERT_ONLY  │
-│                  │    │              │    │  KILL_PROCESS │
+│                  │    │              │    │  KILL_PROCESS│
 │  +saveSnapshot() │    │  +export()   │    └──────────────┘
 │  +saveAlert()    │    └──────────────┘
 │  +getRecent...() │
