@@ -19,6 +19,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Manages the Process Table UI, including sorting, context actions, and row rendering.
+ */
 public class ProcessTableManager {
 
     private final TableView<ProcessInfo> processTable = new TableView<>();
@@ -29,10 +32,16 @@ public class ProcessTableManager {
 
     private Long selectedPid = null;
 
+    /**
+     * Initializes the process table manager.
+     */
     public ProcessTableManager() {
         initializeTable();
     }
 
+    /**
+     * Initializes table bindings and row factory.
+     */
     private void initializeTable() {
         SortedList<ProcessInfo> sortedData = new SortedList<>(masterData);
         sortedData.comparatorProperty().bind(processTable.comparatorProperty());
@@ -42,6 +51,9 @@ public class ProcessTableManager {
         setupRowFactory();
     }
 
+    /**
+     * Sets up table columns for process attributes.
+     */
     private void setupColumns() {
         String[] colNames = {"PID", "Process Name", "Executable Path", "CPU %", "Memory MB",
                 "Status", "Parent PID", "Start Time", "Captured At"};
@@ -77,11 +89,20 @@ public class ProcessTableManager {
         }
     }
 
+    /**
+     * Connects sidebar manager for process interaction updates.
+     * @param sidebar alert sidebar manager
+     */
     public void connectSidebar(AlertSidebarManager sidebar) {
         this.alertSidebarManager = sidebar;
         sidebar.setMasterData(masterData);
     }
 
+    /**
+     * Creates CPU usage column with formatted display.
+     * @param name column name
+     * @return configured column
+     */
     private TableColumn<ProcessInfo, Double> createCpuColumn(String name) {
         TableColumn<ProcessInfo, Double> col = new TableColumn<>(name);
         col.setCellValueFactory(new PropertyValueFactory<>("cpuUsage"));
@@ -96,6 +117,11 @@ public class ProcessTableManager {
         return col;
     }
 
+    /**
+     * Creates memory usage column with formatted display.
+     * @param name column name
+     * @return configured column
+     */
     private TableColumn<ProcessInfo, Long> createMemoryColumn(String name) {
         TableColumn<ProcessInfo, Long> col = new TableColumn<>(name);
         col.setCellValueFactory(new PropertyValueFactory<>("memoryUsageMB"));
@@ -110,6 +136,9 @@ public class ProcessTableManager {
         return col;
     }
 
+    /**
+     * Configures row factory for selection, context menu, and highlighting.
+     */
     private void setupRowFactory() {
         processTable.setRowFactory(tv -> {
             TableRow<ProcessInfo> row = new TableRow<>();
@@ -140,6 +169,11 @@ public class ProcessTableManager {
         });
     }
 
+    /**
+     * Creates context menu for process actions.
+     * @param row table row
+     * @return context menu
+     */
     private ContextMenu createContextMenu(TableRow<ProcessInfo> row) {
         ContextMenu menu = new ContextMenu();
         MenuItem flagItem    = new MenuItem("Flag Process");
@@ -233,13 +267,11 @@ public class ProcessTableManager {
         return menu;
     }
 
-    private void copyPidToClipboard(ProcessInfo p) {
-        if (p == null) return;
-        ClipboardContent content = new ClipboardContent();
-        content.putString(String.valueOf(p.getPid()));
-        Clipboard.getSystemClipboard().setContent(content);
-    }
-
+    /**
+     * Applies visual highlighting rules to a table row.
+     * @param row table row
+     * @param item process item
+     */
     private void applyRowHighlighting(TableRow<ProcessInfo> row, ProcessInfo item) {
         if (item != null && item.isFlagged()) {
             row.setTooltip(new Tooltip("🚩 " + item.getFlagReason()));
@@ -268,6 +300,9 @@ public class ProcessTableManager {
         }
     }
 
+    /**
+     * Flags selected process via user input dialog.
+     */
     public void flagSelectedProcess() {
         ProcessInfo selected = processTable.getSelectionModel().getSelectedItem();
 
@@ -298,10 +333,18 @@ public class ProcessTableManager {
         });
     }
 
+    /**
+     * Returns the JavaFX table view.
+     * @return process table
+     */
     public TableView<ProcessInfo> getTable() {
         return processTable;
     }
 
+    /**
+     * Updates table with new process snapshot.
+     * @param snapshot process list
+     */
     public void updateTable(List<ProcessInfo> snapshot) {
         Map<Long, ProcessInfo> existing = new HashMap<>();
         for (ProcessInfo p : masterData) {
@@ -317,7 +360,6 @@ public class ProcessTableManager {
                     incoming.flag(old.getFlagReason());
                 }
 
-                // replace old object safely
                 int index = masterData.indexOf(old);
                 if (index >= 0) {
                     masterData.set(index, incoming);
@@ -328,7 +370,6 @@ public class ProcessTableManager {
             }
         }
 
-        // remove processes that disappeared
         masterData.removeIf(p ->
                 snapshot.stream().noneMatch(n -> n.getPid() == p.getPid())
         );
@@ -342,22 +383,42 @@ public class ProcessTableManager {
         }
     }
 
+    /**
+     * Adds new processes to the table.
+     * @param newProcesses list of processes
+     */
     public void addProcesses(List<ProcessInfo> newProcesses) {
         masterData.addAll(newProcesses);
     }
 
+    /**
+     * Removes exited processes from the table.
+     * @param exitedProcesses list of processes
+     */
     public void removeProcesses(List<ProcessInfo> exitedProcesses) {
         masterData.removeAll(exitedProcesses);
     }
 
+    /**
+     * Returns immutable copy of current table data.
+     * @return process list
+     */
     public List<ProcessInfo> getCurrentData() {
         return List.copyOf(masterData);
     }
 
+    /**
+     * Sets alert sidebar reference.
+     * @param manager sidebar manager
+     */
     public void setAlertSidebarManager(AlertSidebarManager manager) {
         this.alertSidebarManager = manager;
     }
 
+    /**
+     * Sets status bar manager.
+     * @param manager status bar manager
+     */
     public void setStatusBarManager(StatusBarManager manager) {
         this.statusBarManager = manager;
     }

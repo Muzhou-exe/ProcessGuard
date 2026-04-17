@@ -11,6 +11,12 @@ import java.util.List;
  */
 public class RuleEvaluator {
 
+    /**
+     * Checks whether a process matches a given custom rule.
+     * @param process target process
+     * @param rule custom rule to evaluate
+     * @return true if rule matches, false otherwise
+     */
     public boolean matches(ProcessInfo process, CustomRule rule) {
         List<Condition> conditions = rule.getConditions();
         if (conditions == null || conditions.isEmpty()) {
@@ -25,6 +31,12 @@ public class RuleEvaluator {
         return false;
     }
 
+    /**
+     * Checks if all conditions match.
+     * @param process target process
+     * @param conditions rule conditions
+     * @return true if all match
+     */
     private boolean matchesAll(ProcessInfo process, List<Condition> conditions) {
         for (Condition c : conditions) {
             if (!evaluateCondition(process, c)) {
@@ -34,6 +46,12 @@ public class RuleEvaluator {
         return true;
     }
 
+    /**
+     * Checks if any condition matches.
+     * @param process target process
+     * @param conditions rule conditions
+     * @return true if any match
+     */
     private boolean matchesAny(ProcessInfo process, List<Condition> conditions) {
         for (Condition c : conditions) {
             if (evaluateCondition(process, c)) {
@@ -43,6 +61,12 @@ public class RuleEvaluator {
         return false;
     }
 
+    /**
+     * Evaluates a single condition against a process.
+     * @param p process
+     * @param c condition
+     * @return evaluation result
+     */
     private boolean evaluateCondition(ProcessInfo p, Condition c) {
         try {
             return switch (c.getField()) {
@@ -62,10 +86,17 @@ public class RuleEvaluator {
                 default -> false;
             };
         } catch (Exception e) {
-            return false; // never crash
+            return false;
         }
     }
 
+    /**
+     * Compares string values using rule operator.
+     * @param actual actual value
+     * @param op operator
+     * @param expected expected value
+     * @return comparison result
+     */
     private boolean compareString(String actual, String op, String expected) {
         if (actual == null) return false;
 
@@ -76,6 +107,13 @@ public class RuleEvaluator {
         };
     }
 
+    /**
+     * Compares double values using rule operator.
+     * @param actual actual value
+     * @param op operator
+     * @param expected expected value
+     * @return comparison result
+     */
     private boolean compareDouble(double actual, String op, double expected) {
         return switch (op.toUpperCase()) {
             case "GREATER_THAN" -> actual > expected;
@@ -85,6 +123,13 @@ public class RuleEvaluator {
         };
     }
 
+    /**
+     * Compares long values using rule operator.
+     * @param actual actual value
+     * @param op operator
+     * @param expected expected value
+     * @return comparison result
+     */
     private boolean compareLong(long actual, String op, long expected) {
         return switch (op.toUpperCase()) {
             case "GREATER_THAN" -> actual > expected;
@@ -94,6 +139,11 @@ public class RuleEvaluator {
         };
     }
 
+    /**
+     * Parses string into double safely.
+     * @param v input string
+     * @return parsed double or 0 if invalid
+     */
     private double parseDouble(String v) {
         try {
             return Double.parseDouble(v);
@@ -102,6 +152,11 @@ public class RuleEvaluator {
         }
     }
 
+    /**
+     * Parses string into long safely.
+     * @param v input string
+     * @return parsed long or 0 if invalid
+     */
     private long parseLong(String v) {
         try {
             return Long.parseLong(v);

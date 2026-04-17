@@ -12,27 +12,26 @@ public class ProcessInfo {
     private final long pid;
     private final String name;
     private final String executablePath;
-    private final double cpuUsage;          // percentage (0.0 - 100.0+)
-    private final long memoryUsageMB;       // Resident Set Size in MB
+    private final double cpuUsage;
+    private final long memoryUsageMB;
     private final long parentPid;
     private final Instant startTime;
     private final Instant capturedAt;
 
-    private Status status;                  // mutable only for classification
+    private Status status;
 
     private boolean flagged = false;
     private String flagReason = null;
 
     /**
      * Constructs a new ProcessInfo snapshot.
-     *
-     * @param pid              Process ID
-     * @param name             Process name/command
-     * @param executablePath   Full path to the executable (if available)
-     * @param cpuUsage         CPU usage percentage
-     * @param memoryUsageMB    Memory usage in megabytes
-     * @param parentPid        Parent process ID (-1 if not available)
-     * @param startTime        Process start time (Instant.EPOCH if unknown)
+     * @param pid process id
+     * @param name process name/command
+     * @param executablePath full path to executable
+     * @param cpuUsage cpu usage percentage
+     * @param memoryUsageMB memory usage in MB
+     * @param parentPid parent process id (-1 if unknown)
+     * @param startTime process start time
      */
     public ProcessInfo(long pid, String name, String executablePath,
                        double cpuUsage, long memoryUsageMB,
@@ -41,7 +40,7 @@ public class ProcessInfo {
         this.pid = pid;
         this.name = (name != null) ? name : "unknown";
         this.executablePath = (executablePath != null) ? executablePath : "";
-        this.cpuUsage = Math.max(0.0, cpuUsage);                    // ensure non-negative
+        this.cpuUsage = Math.max(0.0, cpuUsage);
         this.memoryUsageMB = Math.max(0, memoryUsageMB);
         this.parentPid = parentPid;
         this.startTime = (startTime != null) ? startTime : Instant.EPOCH;
@@ -49,61 +48,85 @@ public class ProcessInfo {
         this.status = Status.NORMAL;
     }
 
-    // -------------------------------------------------------------------------
-    // Getters
-    // -------------------------------------------------------------------------
-
+    /**
+     * Returns process id.
+     * @return pid
+     */
     public long getPid() {
         return pid;
     }
 
+    /**
+     * Returns process name.
+     * @return name
+     */
     public String getName() {
         return name;
     }
 
+    /**
+     * Returns executable path.
+     * @return executable path
+     */
     public String getExecutablePath() {
         return executablePath;
     }
 
+    /**
+     * Returns cpu usage percentage.
+     * @return cpu usage
+     */
     public double getCpuUsage() {
         return cpuUsage;
     }
 
+    /**
+     * Returns memory usage in MB.
+     * @return memory usage
+     */
     public long getMemoryUsageMB() {
         return memoryUsageMB;
     }
 
+    /**
+     * Returns parent process id.
+     * @return parent pid
+     */
     public long getParentPid() {
         return parentPid;
     }
 
+    /**
+     * Returns process start time.
+     * @return start time
+     */
     public Instant getStartTime() {
         return startTime;
     }
 
+    /**
+     * Returns time snapshot was captured.
+     * @return captured time
+     */
     public Instant getCapturedAt() {
         return capturedAt;
     }
 
+    /**
+     * Returns current classification status.
+     * @return status
+     */
     public Status getStatus() {
         return status;
     }
 
-    // -------------------------------------------------------------------------
-    // Mutable method (only status can be changed after creation)
-    // -------------------------------------------------------------------------
-
     /**
-     * Updates the classification status of this process.
-     * Called by ProcessMonitor / AlertEngine during rule evaluation.
+     * Updates classification status of this process.
+     * @param status new status
      */
     public void setStatus(Status status) {
         this.status = (status != null) ? status : Status.NORMAL;
     }
-
-    // -------------------------------------------------------------------------
-    // Equality & Hashing (equality based solely on PID, per SDD)
-    // -------------------------------------------------------------------------
 
     @Override
     public boolean equals(Object o) {
@@ -118,12 +141,9 @@ public class ProcessInfo {
         return Objects.hash(pid);
     }
 
-    // -------------------------------------------------------------------------
-    // Useful helper methods
-    // -------------------------------------------------------------------------
-
     /**
-     * Returns a concise string representation suitable for logging and UI.
+     * Returns string representation for logging and UI.
+     * @return formatted string
      */
     @Override
     public String toString() {
@@ -132,7 +152,8 @@ public class ProcessInfo {
     }
 
     /**
-     * Creates a defensive copy with the same data (useful for snapshots).
+     * Creates a defensive copy of this process.
+     * @return copied ProcessInfo
      */
     public ProcessInfo copy() {
         ProcessInfo copy = new ProcessInfo(pid, name, executablePath,
@@ -141,16 +162,25 @@ public class ProcessInfo {
         return copy;
     }
 
+    /**
+     * Returns whether process is flagged.
+     * @return true if flagged
+     */
     public boolean isFlagged() {
         return flagged;
     }
 
+    /**
+     * Returns flag reason.
+     * @return flag reason
+     */
     public String getFlagReason() {
         return flagReason;
     }
 
     /**
-     * Marks this process as flagged with a reason.
+     * Flags this process with a reason.
+     * @param reason flag reason
      */
     public void flag(String reason) {
         this.flagged = true;

@@ -15,12 +15,25 @@ public class CustomRule {
     private final String description;
     private boolean enabled;
     private final List<Condition> conditions;
-    private final String logicOperator; // AND / OR
+    private final String logicOperator;
     private final Severity severity;
     private final String messageTemplate;
     private final int cooldownSeconds;
     private final RuleAction action;
 
+    /**
+     * Creates a custom rule for process monitoring.
+     * @param id rule id
+     * @param name rule name
+     * @param description rule description
+     * @param enabled whether rule is enabled
+     * @param conditions list of conditions
+     * @param logicOperator AND/OR logic operator
+     * @param severity rule severity
+     * @param messageTemplate alert message template
+     * @param cooldownSeconds cooldown period in seconds
+     * @param action action to execute when rule matches
+     */
     public CustomRule(
             long id,
             String name,
@@ -54,52 +67,93 @@ public class CustomRule {
 
         this.cooldownSeconds = Math.max(0, cooldownSeconds);
 
-        this.action = (action != null) ? action : RuleAction.ALERT_ONLY;    }
+        this.action = (action != null) ? action : RuleAction.ALERT_ONLY;
+    }
 
-    // =========================================================
-    // GETTERS / SETTERS
-    // =========================================================
-
+    /**
+     * Returns rule id.
+     * @return rule id
+     */
     public long getId() { return id; }
 
+    /**
+     * Returns rule name.
+     * @return name
+     */
     public String getName() { return name; }
 
+    /**
+     * Returns rule description.
+     * @return description
+     */
     public String getDescription() { return description; }
 
+    /**
+     * Returns whether rule is enabled.
+     * @return true if enabled
+     */
     public boolean isEnabled() { return enabled; }
 
+    /**
+     * Sets enabled state.
+     * @param enabled enabled flag
+     */
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
     }
 
+    /**
+     * Returns rule conditions.
+     * @return list of conditions (defensive copy)
+     */
     public List<Condition> getConditions() {
         return new ArrayList<>(conditions);
     }
 
+    /**
+     * Returns logic operator (AND/OR).
+     * @return logic operator
+     */
     public String getLogicOperator() {
         return logicOperator;
     }
 
+    /**
+     * Returns severity level.
+     * @return severity
+     */
     public Severity getSeverity() {
         return severity;
     }
 
+    /**
+     * Returns message template.
+     * @return message template
+     */
     public String getMessageTemplate() {
         return messageTemplate;
     }
 
+    /**
+     * Returns cooldown period in seconds.
+     * @return cooldown seconds
+     */
     public int getCooldownSeconds() {
         return cooldownSeconds;
     }
 
+    /**
+     * Returns rule action.
+     * @return rule action
+     */
     public RuleAction getAction() {
         return action;
     }
 
-    // =========================================================
-    // DEBUG / LOGGING
-    // =========================================================
-
+    /**
+     * Returns string representation of rule.
+     * @return formatted string
+     */
     @Override
     public String toString() {
         return String.format(

@@ -13,6 +13,10 @@ import javafx.scene.Scene;
 import javafx.scene.layout.BorderPane;
 import javafx.stage.Stage;
 
+/**
+ * Main JavaFX dashboard for ProcessGuard.
+ * Coordinates UI components and connects them to backend services.
+ */
 public class MainDashboard extends Application
         implements ProcessListener, AlertListener {
 
@@ -29,9 +33,12 @@ public class MainDashboard extends Application
         launch(args);
     }
 
+    /**
+     * Initializes and starts the main JavaFX UI.
+     * @param primaryStage primary application window
+     */
     @Override
     public void start(Stage primaryStage) {
-        // Register backend references
         this.historyStorage = ProcessGuardMain.historyStorage;
         this.processMonitor = ProcessGuardMain.processMonitor;
         this.alertEngine = ProcessGuardMain.alertEngine;
@@ -46,7 +53,6 @@ public class MainDashboard extends Application
 
         tableManager.connectSidebar(alertSidebarManager);
 
-        // Build UI components
         BorderPane root = new BorderPane();
         root.setTop(toolbarManager.createToolbar(primaryStage, tableManager));
         root.setCenter(tableManager.getTable());
@@ -58,20 +64,20 @@ public class MainDashboard extends Application
         primaryStage.setTitle("ProcessGuard v1.6 – Live Process Monitor");
         primaryStage.show();
 
-        // Register listeners
         processMonitor.addListener(this);
         alertEngine.addAlertListener(this);
         if (ProcessGuardMain.customRuleEngine != null) {
             ProcessGuardMain.customRuleEngine.addAlertListener(this);
         }
 
-        // Wire components
         tableManager.setAlertSidebarManager(alertSidebarManager);
         tableManager.setStatusBarManager(statusBarManager);
-
     }
 
-    // ====================== Observer Callbacks ======================
+    /**
+     * Handles snapshot updates from ProcessMonitor.
+     * @param snapshot current process snapshot
+     */
     @Override
     public void onSnapshotUpdate(java.util.List<ProcessInfo> snapshot) {
         javafx.application.Platform.runLater(() -> {
@@ -80,11 +86,19 @@ public class MainDashboard extends Application
         });
     }
 
+    /**
+     * Handles alerts from AlertEngine.
+     * @param alert alert event
+     */
     @Override
     public void onAlert(AlertEvent alert) {
         alertSidebarManager.addAlert(alert);
     }
 
+    /**
+     * Handles exited processes.
+     * @param exitedProcesses list of exited processes
+     */
     @Override
     public void onExitedProcesses(java.util.List<ProcessInfo> exitedProcesses) {
         javafx.application.Platform.runLater(() -> {
@@ -92,6 +106,10 @@ public class MainDashboard extends Application
         });
     }
 
+    /**
+     * Handles newly detected processes.
+     * @param newProcesses list of new processes
+     */
     @Override
     public void onNewProcesses(java.util.List<ProcessInfo> newProcesses) {
         javafx.application.Platform.runLater(() -> {

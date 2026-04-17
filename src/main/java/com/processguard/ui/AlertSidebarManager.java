@@ -14,12 +14,13 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.layout.VBox;
-import javafx.stage.Stage;
-import javafx.scene.layout.StackPane;
 import javafx.scene.control.ScrollPane;
 
 import java.util.Optional;
 
+/**
+ * Manages the alert sidebar UI and process interaction logic.
+ */
 public class AlertSidebarManager {
 
     private final VBox sidebar;
@@ -34,6 +35,9 @@ public class AlertSidebarManager {
 
     private Long selectedPid;
 
+    /**
+     * Constructs the alert sidebar manager and initializes UI components.
+     */
     public AlertSidebarManager() {
         this.sidebar = new VBox(10);
         this.alertList = new ListView<>();
@@ -51,6 +55,9 @@ public class AlertSidebarManager {
         initializeSidebar();
     }
 
+    /**
+     * Initializes sidebar layout and UI components.
+     */
     private void initializeSidebar() {
         alertList.setItems(alertData);
         setupAlertCellFactory();
@@ -83,8 +90,16 @@ public class AlertSidebarManager {
         sidebar.setPadding(new Insets(10));
     }
 
+    /**
+     * Sets up custom cell rendering for alert list.
+     */
     private void setupAlertCellFactory() {
         alertList.setCellFactory(lv -> new ListCell<>() {
+            /**
+             * Updates cell display for alert items.
+             * @param alert alert event
+             * @param empty whether cell is empty
+             */
             @Override
             protected void updateItem(AlertEvent alert, boolean empty) {
                 super.updateItem(alert, empty);
@@ -129,10 +144,18 @@ public class AlertSidebarManager {
         });
     }
 
+    /**
+     * Sets master process data list.
+     * @param data process list
+     */
     public void setMasterData(ObservableList<ProcessInfo> data) {
         this.masterData = data;
     }
 
+    /**
+     * Adds alert to sidebar.
+     * @param alert alert event
+     */
     public void addAlert(AlertEvent alert) {
         Platform.runLater(() -> {
             alertData.add(0, alert);
@@ -143,6 +166,10 @@ public class AlertSidebarManager {
         });
     }
 
+    /**
+     * Selects process and updates details panel.
+     * @param p selected process
+     */
     public void selectProcess(ProcessInfo p) {
         this.selectedPid = (p != null) ? p.getPid() : null;
 
@@ -156,6 +183,9 @@ public class AlertSidebarManager {
         updateDetailsPanel();
     }
 
+    /**
+     * Updates process details display.
+     */
     private void updateDetailsPanel() {
         if (selectedPid == null) {
             detailsLabel.setText("Select a process from the table...");
@@ -194,6 +224,10 @@ public class AlertSidebarManager {
         detailsLabel.setText(text.toString());
     }
 
+    /**
+     * Finds latest process instance from master data.
+     * @return latest process or null
+     */
     private ProcessInfo findLatestProcess() {
         if (masterData == null) return null;
 
@@ -203,6 +237,9 @@ public class AlertSidebarManager {
                 .orElse(null);
     }
 
+    /**
+     * Kills currently selected process.
+     */
     private void killSelectedProcess() {
         if (selectedPid == null) return;
 
@@ -232,10 +269,18 @@ public class AlertSidebarManager {
         }).start();
     }
 
+    /**
+     * Returns sidebar UI component.
+     * @return sidebar container
+     */
     public VBox getSidebar() {
         return sidebar;
     }
 
+    /**
+     * Kills process from external caller.
+     * @param p process to kill
+     */
     public void killProcess(ProcessInfo p) {
         // Called from table context menu
         selectProcess(p);
