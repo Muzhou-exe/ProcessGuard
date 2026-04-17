@@ -50,6 +50,7 @@ public class ProcessScanner {
     private final AppConfig config = AppConfig.getInstance();
 
     private final Map<Long, String> psNameCache = new ConcurrentHashMap<>();
+    private final Map<Long, String> tasklistNameCache = new ConcurrentHashMap<>();
 
     /**
      * Returns snapshot of all running processes.
@@ -71,8 +72,8 @@ public class ProcessScanner {
                         : executablePath.substring(executablePath.lastIndexOf(java.io.File.separator) + 1);
 
                 if (name.equals("unknown")) {
-                    ProcessInfo psFallback = psLookup(pid);
-                    name = psFallback != null ? psFallback.getName() : "unknown";
+                    ProcessInfo fallback = isWindows() ? tasklistLookup(pid) : psLookup(pid);
+                    name = fallback != null ? fallback.getName() : "unknown";
                 }
 
                 long parentPid = handle.parent().map(ProcessHandle::pid).orElse(-1L);
@@ -249,6 +250,46 @@ public class ProcessScanner {
         }
 
         psNameCache.put(pid, null);
+        return null;
+    }
+
+    /**
+     * Looks up process name using tasklist command (Windows).
+     */
+    private ProcessInfo tasklistLookup(long pid) {
+        if (!isWindows()) return null;
+
+        if (tasklistNameCache.containsKey(pid)) {
+            String cachedName = tasklistNameCache.get(pid);
+            return cachedName != null
+                    ? new ProcessInfo(pid, cachedName, "", 0.0, 0, -1L, Instant.EPOCH)
+                    : null;
+        }
+
+        try {
+            Process process = new ProcessBuilder(
+                    CMD_TASKLIST, "/fi", "PID eq " + pid, "/fo", TASKLIST_FORMAT, TASKLIST_NOHEADER
+            ).start();
+
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                String line = reader.readLine();
+                if (line != null && !line.isBlank()) {
+                    String[] parts = line.split("\",\"");
+                    if (parts.length >= 2) {
+                        String name = parts[0].replace("\"", "").trim();
+                        if (!name.isBlank() && !name.equalsIgnoreCase("INFO")) {
+                            tasklistNameCache.put(pid, name);
+                            return new ProcessInfo(pid, name, "", 0.0, 0, -1L, Instant.EPOCH);
+                        }
+                    }
+                }
+            }
+
+        } catch (Exception e) {
+            System.err.println("tasklistLookup failed for PID " + pid + ": " + e.getMessage());
+        }
+
+        tasklistNameCache.put(pid, null);
         return null;
     }
 }
