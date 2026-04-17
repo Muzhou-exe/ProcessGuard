@@ -28,7 +28,7 @@ public class ProcessGuardMain {
 
         processMonitor.start();
 
-        // Launch GUI (blocks until window closes)
+        // Launch GUI
         Application.launch(MainDashboard.class, args);
     }
 }

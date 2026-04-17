@@ -7,12 +7,7 @@ import javafx.beans.binding.Bindings;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.SortedList;
-import javafx.scene.control.ContextMenu;
-import javafx.scene.control.MenuItem;
-import javafx.scene.control.TableCell;
-import javafx.scene.control.TableColumn;
-import javafx.scene.control.TableRow;
-import javafx.scene.control.TableView;
+import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
@@ -31,6 +26,8 @@ public class ProcessTableManager {
 
     private AlertSidebarManager alertSidebarManager;
     private StatusBarManager statusBarManager;
+
+    private Long selectedPid = null;
 
     public ProcessTableManager() {
         initializeTable();
@@ -80,6 +77,11 @@ public class ProcessTableManager {
         }
     }
 
+    public void connectSidebar(AlertSidebarManager sidebar) {
+        this.alertSidebarManager = sidebar;
+        sidebar.setMasterData(masterData);
+    }
+
     private TableColumn<ProcessInfo, Double> createCpuColumn(String name) {
         TableColumn<ProcessInfo, Double> col = new TableColumn<>(name);
         col.setCellValueFactory(new PropertyValueFactory<>("cpuUsage"));
@@ -120,8 +122,15 @@ public class ProcessTableManager {
             );
 
             row.setOnMouseClicked(e -> {
-                if (!row.isEmpty() && alertSidebarManager != null) {
-                    alertSidebarManager.selectProcess(row.getItem());
+                if (row.isEmpty()) return;
+
+                ProcessInfo p = row.getItem();
+                if (p == null) return;
+
+                selectedPid = p.getPid();
+
+                if (alertSidebarManager != null) {
+                    alertSidebarManager.selectProcess(p);
                 }
             });
 
@@ -133,10 +142,76 @@ public class ProcessTableManager {
 
     private ContextMenu createContextMenu(TableRow<ProcessInfo> row) {
         ContextMenu menu = new ContextMenu();
-
-        MenuItem killItem = new MenuItem("Kill Process");
+        MenuItem flagItem    = new MenuItem("Flag Process");
+        MenuItem killItem    = new MenuItem("Kill Process");
         MenuItem copyPidItem = new MenuItem("Copy PID");
         MenuItem detailsItem = new MenuItem("View Details");
+
+        final Long[] capturedPid = { null };
+
+        menu.setOnShowing(e -> {
+            ProcessInfo item = row.getItem();
+            if (item == null) {
+                menu.hide();
+                return;
+            }
+
+            capturedPid[0] = item.getPid();
+            flagItem.setText(item.isFlagged() ? "Unflag Process" : "Flag Process");
+        });
+
+        flagItem.setOnAction(e -> {
+            if (capturedPid[0] == null) return;
+
+            masterData.stream()
+                    .filter(p -> p.getPid() == capturedPid[0])
+                    .findFirst()
+                    .ifPresent(p -> {
+                        if (p.isFlagged()) {
+                            p.unflag();
+                            if (alertSidebarManager != null) alertSidebarManager.selectProcess(p);
+                        } else {
+                            processTable.getSelectionModel().select(p);
+                            flagSelectedProcess();
+                        }
+                    });
+
+            processTable.refresh();
+        });
+
+        killItem.setOnAction(e -> {
+            if (capturedPid[0] == null) return;
+
+            masterData.stream()
+                    .filter(p -> p.getPid() == capturedPid[0])
+                    .findFirst()
+                    .ifPresent(p -> {
+                        if (alertSidebarManager != null) {
+                            alertSidebarManager.killProcess(p);
+                        }
+                    });
+        });
+
+        copyPidItem.setOnAction(e -> {
+            if (capturedPid[0] == null) return;
+
+            ClipboardContent content = new ClipboardContent();
+            content.putString(String.valueOf(capturedPid[0]));
+            Clipboard.getSystemClipboard().setContent(content);
+        });
+
+        detailsItem.setOnAction(e -> {
+            if (capturedPid[0] == null) return;
+
+            masterData.stream()
+                    .filter(p -> p.getPid() == capturedPid[0])
+                    .findFirst()
+                    .ifPresent(p -> {
+                        if (alertSidebarManager != null) {
+                            alertSidebarManager.selectProcess(p);
+                        }
+                    });
+        });
 
         row.setOnDragDetected(e -> {
             if (row.isEmpty()) return;
@@ -154,15 +229,7 @@ public class ProcessTableManager {
             e.consume();
         });
 
-        killItem.setOnAction(e -> {
-            if (alertSidebarManager != null) alertSidebarManager.killProcess(row.getItem());
-        });
-        copyPidItem.setOnAction(e -> copyPidToClipboard(row.getItem()));
-        detailsItem.setOnAction(e -> {
-            if (alertSidebarManager != null) alertSidebarManager.selectProcess(row.getItem());
-        });
-
-        menu.getItems().addAll(killItem, copyPidItem, detailsItem);
+        menu.getItems().addAll(killItem, copyPidItem, detailsItem, flagItem);
         return menu;
     }
 
@@ -174,6 +241,12 @@ public class ProcessTableManager {
     }
 
     private void applyRowHighlighting(TableRow<ProcessInfo> row, ProcessInfo item) {
+        if (item != null && item.isFlagged()) {
+            row.setTooltip(new Tooltip("🚩 " + item.getFlagReason()));
+            row.setStyle("-fx-background-color: rgba(0, 120, 255, 0.35);");
+            return;
+        }
+
         if (item == null) {
             row.setStyle("");
             return;
@@ -195,12 +268,78 @@ public class ProcessTableManager {
         }
     }
 
+    public void flagSelectedProcess() {
+        ProcessInfo selected = processTable.getSelectionModel().getSelectedItem();
+
+        if (selected == null) {
+            System.out.println("No process selected");
+            return;
+        }
+
+        TextInputDialog dialog = new TextInputDialog();
+        dialog.setTitle("Flag Process");
+        dialog.setHeaderText("Enter reason for flagging process " + selected.getName());
+
+        dialog.showAndWait().ifPresent(reason -> {
+
+            long pid = selected.getPid();
+
+            masterData.stream()
+                    .filter(p -> p.getPid() == pid)
+                    .findFirst()
+                    .ifPresent(p -> {
+                        p.flag(reason);
+                        if (alertSidebarManager != null) {
+                            alertSidebarManager.selectProcess(p);
+                        }
+                    });
+
+            processTable.refresh();
+        });
+    }
+
     public TableView<ProcessInfo> getTable() {
         return processTable;
     }
 
     public void updateTable(List<ProcessInfo> snapshot) {
-        masterData.setAll(snapshot);
+        Map<Long, ProcessInfo> existing = new HashMap<>();
+        for (ProcessInfo p : masterData) {
+            existing.put(p.getPid(), p);
+        }
+
+        for (ProcessInfo incoming : snapshot) {
+            ProcessInfo old = existing.get(incoming.getPid());
+
+            if (old != null) {
+
+                if (old.isFlagged()) {
+                    incoming.flag(old.getFlagReason());
+                }
+
+                // replace old object safely
+                int index = masterData.indexOf(old);
+                if (index >= 0) {
+                    masterData.set(index, incoming);
+                }
+
+            } else {
+                masterData.add(incoming);
+            }
+        }
+
+        // remove processes that disappeared
+        masterData.removeIf(p ->
+                snapshot.stream().noneMatch(n -> n.getPid() == p.getPid())
+        );
+
+        if (selectedPid != null) {
+            final Long pidToReselect = selectedPid;
+            processTable.getItems().stream()
+                    .filter(p -> p.getPid() == pidToReselect)
+                    .findFirst()
+                    .ifPresent(p -> processTable.getSelectionModel().select(p));
+        }
     }
 
     public void addProcesses(List<ProcessInfo> newProcesses) {

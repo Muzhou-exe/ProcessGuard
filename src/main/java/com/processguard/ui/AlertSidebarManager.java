@@ -15,6 +15,8 @@ import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
+import javafx.scene.layout.StackPane;
+import javafx.scene.control.ScrollPane;
 
 import java.util.Optional;
 
@@ -23,16 +25,28 @@ public class AlertSidebarManager {
     private final VBox sidebar;
     private final ListView<AlertEvent> alertList;
     private final ObservableList<AlertEvent> alertData = FXCollections.observableArrayList();
-    private final Label detailsLabel;
     private final Button killButton;
 
-    private ProcessInfo selectedProcess;
+    private final Label detailsLabel;
+    private final ScrollPane detailsScroll;
+
+    private ObservableList<ProcessInfo> masterData;
+
+    private Long selectedPid;
 
     public AlertSidebarManager() {
         this.sidebar = new VBox(10);
         this.alertList = new ListView<>();
         this.detailsLabel = new Label("Select a process from the table...");
+        detailsScroll = new ScrollPane(detailsLabel);
         this.killButton = new Button("Kill Process");
+
+        detailsScroll.setFitToWidth(true);
+        detailsScroll.setFitToHeight(false);
+        detailsScroll.setPrefViewportHeight(250);
+        detailsScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        detailsScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        detailsScroll.setStyle("-fx-background-color: transparent;");
 
         initializeSidebar();
     }
@@ -55,7 +69,6 @@ public class AlertSidebarManager {
             -fx-border-width: 1;
             -fx-background-color: #fafafa;
         """);
-        detailsLabel.setPrefHeight(250);
 
         killButton.setDisable(true);
         killButton.setStyle("""
@@ -65,7 +78,7 @@ public class AlertSidebarManager {
         """);
         killButton.setOnAction(e -> killSelectedProcess());
 
-        sidebar.getChildren().addAll(alertsTitle, alertList, detailsTitle, detailsLabel, killButton);
+        sidebar.getChildren().addAll(alertsTitle, alertList, detailsTitle, detailsScroll, killButton);
         sidebar.setPrefWidth(320);
         sidebar.setPadding(new Insets(10));
     }
@@ -116,6 +129,10 @@ public class AlertSidebarManager {
         });
     }
 
+    public void setMasterData(ObservableList<ProcessInfo> data) {
+        this.masterData = data;
+    }
+
     public void addAlert(AlertEvent alert) {
         Platform.runLater(() -> {
             alertData.add(0, alert);
@@ -127,7 +144,8 @@ public class AlertSidebarManager {
     }
 
     public void selectProcess(ProcessInfo p) {
-        this.selectedProcess = p;
+        this.selectedPid = (p != null) ? p.getPid() : null;
+
         if (p == null) {
             killButton.setDisable(true);
             detailsLabel.setText("Select a process from the table...");
@@ -135,33 +153,67 @@ public class AlertSidebarManager {
         }
 
         killButton.setDisable(false);
-        updateDetailsPanel(p);
+        updateDetailsPanel();
     }
 
-    private void updateDetailsPanel(ProcessInfo p) {
-        detailsLabel.setText("""
-            PID: %d
-            Name: %s
-            Path: %s
-            CPU: %.1f%%
-            Memory: %d MB
-            Parent PID: %d
-            Status: %s
-            """.formatted(
+    private void updateDetailsPanel() {
+        if (selectedPid == null) {
+            detailsLabel.setText("Select a process from the table...");
+            return;
+        }
+
+        // 🔥 IMPORTANT: fetch latest object
+        ProcessInfo p = findLatestProcess();
+
+        if (p == null) {
+            detailsLabel.setText("Process no longer exists.");
+            return;
+        }
+
+        StringBuilder text = new StringBuilder();
+
+        text.append("""
+    PID: %d
+    Name: %s
+    Path: %s
+    CPU: %.1f%%
+    Memory: %d MB
+    Parent PID: %d
+    Status: %s
+    """.formatted(
                 p.getPid(), p.getName(), p.getExecutablePath(),
                 p.getCpuUsage(), p.getMemoryUsageMB(),
                 p.getParentPid(), p.getStatus()
         ));
+
+        if (p.isFlagged()) {
+            text.append("\n🚩 FLAGGED\n");
+            text.append("Reason: ").append(p.getFlagReason()).append("\n");
+        }
+
+        detailsLabel.setText(text.toString());
+    }
+
+    private ProcessInfo findLatestProcess() {
+        if (masterData == null) return null;
+
+        return masterData.stream()
+                .filter(p -> p.getPid() == selectedPid)
+                .findFirst()
+                .orElse(null);
     }
 
     private void killSelectedProcess() {
-        if (selectedProcess == null) return;
+        if (selectedPid == null) return;
+
+        ProcessInfo p = findLatestProcess();
+        if (p == null) return;
 
         Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
         confirm.setTitle("Confirm Process Kill");
         confirm.setHeaderText("Terminate Process?");
         confirm.setContentText("Are you sure you want to kill:\n\n" +
-                selectedProcess.getName() + " (PID " + selectedProcess.getPid() + ")?\n\n" +
+                p.getName() + " (PID " + p.getPid() + ")?\n\n" +
                 "This action cannot be undone.");
 
         Optional<ButtonType> result = confirm.showAndWait();
@@ -170,11 +222,11 @@ public class AlertSidebarManager {
         killButton.setDisable(true);
 
         new Thread(() -> {
-            boolean success = ProcessKiller.kill(selectedProcess.getPid());
+            boolean success = ProcessKiller.kill(p.getPid());
             Platform.runLater(() -> {
                 String suffix = success ? "\n\n Process killed successfully" : "\n\n Failed to kill process";
                 detailsLabel.setText(detailsLabel.getText() + suffix);
-                selectedProcess = null;
+                selectedPid = null;
                 killButton.setDisable(true);
             });
         }).start();
