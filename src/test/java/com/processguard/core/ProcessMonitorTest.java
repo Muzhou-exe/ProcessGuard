@@ -79,15 +79,29 @@ class ProcessMonitorTest {
     // ── scanNow ───────────────────────────────────────────────────────────────
 
     @Test
-    void scanNow_populatesProcessCount() {
+    void scanNow_populatesProcessCount() throws InterruptedException {
+        CountDownLatch latch = new CountDownLatch(1);
+        monitor.addListener(new ProcessListener() {
+            @Override public void onNewProcesses(List<ProcessInfo> p) {}
+            @Override public void onExitedProcesses(List<ProcessInfo> p) {}
+            @Override public void onSnapshotUpdate(List<ProcessInfo> s) { latch.countDown(); }
+        });
         monitor.scanNow();
+        assertTrue(latch.await(10, TimeUnit.SECONDS));
         assertTrue(monitor.getProcessCount() > 0);
     }
 
     @Test
-    void scanNow_getCurrentProcesses_returnsNonEmpty() {
+    void scanNow_getCurrentProcesses_returnsNonEmpty() throws InterruptedException {
+        CountDownLatch latch = new CountDownLatch(1);
+        monitor.addListener(new ProcessListener() {
+            @Override public void onNewProcesses(List<ProcessInfo> p) {}
+            @Override public void onExitedProcesses(List<ProcessInfo> p) {}
+            @Override public void onSnapshotUpdate(List<ProcessInfo> s) { latch.countDown(); }
+        });
         monitor.scanNow();
-        assertFalse(ProcessMonitor.getCurrentProcesses().isEmpty());
+        assertTrue(latch.await(10, TimeUnit.SECONDS));
+        assertFalse(monitor.getCurrentProcesses().isEmpty());
     }
 
     @Test

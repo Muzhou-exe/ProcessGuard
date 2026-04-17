@@ -36,18 +36,6 @@ public class MainDashboard extends Application
         this.processMonitor = ProcessGuardMain.processMonitor;
         this.alertEngine = ProcessGuardMain.alertEngine;
 
-        // Build UI components
-        BorderPane root = new BorderPane();
-        root.setTop(toolbarManager.createToolbar(primaryStage, tableManager));
-        root.setCenter(tableManager.getTable());
-        root.setRight(alertSidebarManager.getSidebar());
-        root.setBottom(statusBarManager.getStatusBar());
-
-        Scene scene = new Scene(root, 1200, 800);
-        primaryStage.setScene(scene);
-        primaryStage.setTitle("ProcessGuard v1.6 – Live Process Monitor");
-        primaryStage.show();
-
         // Register listeners
         processMonitor.addListener(this);
         alertEngine.addAlertListener(this);
@@ -59,7 +47,17 @@ public class MainDashboard extends Application
         tableManager.setAlertSidebarManager(alertSidebarManager);
         tableManager.setStatusBarManager(statusBarManager);
 
+        // Build UI components
+        BorderPane root = new BorderPane();
         root.setTop(toolbarManager.createToolbar(primaryStage, tableManager));
+        root.setCenter(tableManager.getTable());
+        root.setRight(alertSidebarManager.getSidebar());
+        root.setBottom(statusBarManager.getStatusBar());
+
+        Scene scene = new Scene(root, 1200, 800);
+        primaryStage.setScene(scene);
+        primaryStage.setTitle("ProcessGuard v1.6 – Live Process Monitor");
+        primaryStage.show();
     }
 
     // ====================== Observer Callbacks ======================

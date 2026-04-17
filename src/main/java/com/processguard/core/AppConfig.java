@@ -74,17 +74,23 @@ public class AppConfig {
                     this.memoryThreshold = loaded.memoryThreshold;
 
                     this.blacklist.clear();
-                    this.blacklist.addAll(loaded.blacklist);
+                    if (loaded.blacklist != null) {
+                        this.blacklist.addAll(loaded.blacklist);
+                    }
 
                     this.whitelist.clear();
-                    this.whitelist.addAll(loaded.whitelist);
+                    if (loaded.whitelist != null) {
+                        this.whitelist.addAll(loaded.whitelist);
+                    }
 
                     this.webPort = loaded.webPort;
                     this.startMinimized = loaded.startMinimized;
                     this.enableSystemTray = loaded.enableSystemTray;
 
                     this.customRules.clear();
-                    this.customRules.addAll(loaded.customRules);
+                    if (loaded.customRules != null) {
+                        this.customRules.addAll(loaded.customRules);
+                    }
                 }
             } else {
                 // Create default configuration and save it
