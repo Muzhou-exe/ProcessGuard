@@ -65,8 +65,10 @@ public class MainDashboard extends Application
     // ====================== Observer Callbacks ======================
     @Override
     public void onSnapshotUpdate(java.util.List<ProcessInfo> snapshot) {
-        tableManager.updateTable(snapshot);
-        statusBarManager.updateStatus(snapshot);
+        javafx.application.Platform.runLater(() -> {
+            tableManager.updateTable(snapshot);
+            statusBarManager.updateStatus(snapshot);
+        });
     }
 
     @Override
@@ -76,11 +78,15 @@ public class MainDashboard extends Application
 
     @Override
     public void onExitedProcesses(java.util.List<ProcessInfo> exitedProcesses) {
-        tableManager.removeProcesses(exitedProcesses);
+        javafx.application.Platform.runLater(() -> {
+            tableManager.removeProcesses(exitedProcesses);
+        });
     }
 
     @Override
     public void onNewProcesses(java.util.List<ProcessInfo> newProcesses) {
-        tableManager.addProcesses(newProcesses);
+        javafx.application.Platform.runLater(() -> {
+            tableManager.addProcesses(newProcesses);
+        });
     }
 }
