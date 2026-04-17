@@ -23,9 +23,10 @@ public class ProcessGuardMain {
 
         processMonitor.start();
 
+        Runtime.getRuntime().addShutdownHook(new Thread(processMonitor::stop));
+
         // Launch GUI
         Application.launch(MainDashboard.class, args);
 
-        Runtime.getRuntime().addShutdownHook(new Thread(processMonitor::stop));
     }
 }
