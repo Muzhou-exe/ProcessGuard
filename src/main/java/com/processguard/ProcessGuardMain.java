@@ -24,11 +24,11 @@ public class ProcessGuardMain {
         processMonitor.addListener(alertEngine);
         processMonitor.addListener(customRuleEngine);
 
+        Runtime.getRuntime().addShutdownHook(new Thread(processMonitor::stop));
+
         processMonitor.start();
 
-        // Launch GUI
+        // Launch GUI (blocks until window closes)
         Application.launch(MainDashboard.class, args);
-
-        Runtime.getRuntime().addShutdownHook(new Thread(processMonitor::stop));
     }
 }
