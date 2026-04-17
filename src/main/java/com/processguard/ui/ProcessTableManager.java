@@ -219,20 +219,22 @@ public class ProcessTableManager {
 
     public void updateTable(List<ProcessInfo> snapshot) {
         Map<Long, ProcessInfo> existing = new HashMap<>();
+
         for (ProcessInfo p : masterData) {
             existing.put(p.getPid(), p);
         }
 
         masterData.clear();
 
-        for (ProcessInfo p : snapshot) {
-            ProcessInfo old = existing.get(p.getPid());
+        for (ProcessInfo incoming : snapshot) {
+            ProcessInfo old = existing.get(incoming.getPid());
 
-            if (old != null && old.isFlagged()) {
-                p.flag(old.getFlagReason());
+            if (old != null) {
+                // KEEP OLD OBJECT (important)
+                masterData.add(old);
+            } else {
+                masterData.add(incoming);
             }
-
-            masterData.add(p);
         }
     }
 
