@@ -134,19 +134,28 @@ public class AlertSidebarManager {
     }
 
     private void updateDetailsPanel(ProcessInfo p) {
-        detailsLabel.setText("""
-            PID: %d
-            Name: %s
-            Path: %s
-            CPU: %.1f%%
-            Memory: %d MB
-            Parent PID: %d
-            Status: %s
-            """.formatted(
+        StringBuilder text = new StringBuilder();
+
+        text.append("""
+        PID: %d
+        Name: %s
+        Path: %s
+        CPU: %.1f%%
+        Memory: %d MB
+        Parent PID: %d
+        Status: %s
+        """.formatted(
                 p.getPid(), p.getName(), p.getExecutablePath(),
                 p.getCpuUsage(), p.getMemoryUsageMB(),
                 p.getParentPid(), p.getStatus()
         ));
+
+        if (p.isFlagged()) {
+            text.append("\n🚩 FLAGGED\n");
+            text.append("Reason: ").append(p.getFlagReason()).append("\n");
+        }
+
+        detailsLabel.setText(text.toString());
     }
 
     private void killSelectedProcess() {
