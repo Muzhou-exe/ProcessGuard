@@ -20,6 +20,9 @@ public class ProcessInfo {
 
     private Status status;                  // mutable only for classification
 
+    private boolean flagged = false;
+    private String flagReason = "";
+
     /**
      * Constructs a new ProcessInfo snapshot.
      *
@@ -136,5 +139,29 @@ public class ProcessInfo {
                 cpuUsage, memoryUsageMB, parentPid, startTime);
         copy.setStatus(this.status);
         return copy;
+    }
+
+    public boolean isFlagged() {
+        return flagged;
+    }
+
+    public String getFlagReason() {
+        return flagReason;
+    }
+
+    /**
+     * Marks this process as flagged with a reason.
+     */
+    public void flag(String reason) {
+        this.flagged = true;
+        this.flagReason = (reason != null) ? reason : "";
+    }
+
+    /**
+     * Removes flag from this process.
+     */
+    public void unflag() {
+        this.flagged = false;
+        this.flagReason = "";
     }
 }
