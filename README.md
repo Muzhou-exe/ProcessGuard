@@ -4,6 +4,8 @@ A desktop system monitoring application that tracks running processes, classifie
 
 Built with Java 21 and JavaFX 21.
 
+Video Demo Link: https://drive.google.com/file/d/112Llq3EeuME9ES4UZ6YB75l-I3lChHCs/view?usp=sharing
+
 ## Features
 
 - **Real-time process monitoring** with configurable scan intervals
