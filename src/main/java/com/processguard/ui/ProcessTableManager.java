@@ -23,6 +23,8 @@ public class ProcessTableManager {
     private AlertSidebarManager alertSidebarManager;
     private StatusBarManager statusBarManager;
 
+    private Long selectedPid = null;
+
     public ProcessTableManager() {
         initializeTable();
     }
@@ -111,8 +113,15 @@ public class ProcessTableManager {
             );
 
             row.setOnMouseClicked(e -> {
-                if (!row.isEmpty() && alertSidebarManager != null) {
-                    alertSidebarManager.selectProcess(row.getItem());
+                if (row.isEmpty()) return;
+
+                ProcessInfo p = row.getItem();
+                if (p == null) return;
+
+                selectedPid = p.getPid();
+
+                if (alertSidebarManager != null) {
+                    alertSidebarManager.selectProcess(p);
                 }
             });
 
@@ -208,7 +217,14 @@ public class ProcessTableManager {
         dialog.setHeaderText("Enter reason for flagging process " + selected.getName());
 
         dialog.showAndWait().ifPresent(reason -> {
-            selected.flag(reason);
+
+            long pid = selected.getPid();
+
+            masterData.stream()
+                    .filter(p -> p.getPid() == pid)
+                    .findFirst()
+                    .ifPresent(p -> p.flag(reason));
+
             processTable.refresh();
         });
     }
@@ -219,22 +235,47 @@ public class ProcessTableManager {
 
     public void updateTable(List<ProcessInfo> snapshot) {
         Map<Long, ProcessInfo> existing = new HashMap<>();
-
         for (ProcessInfo p : masterData) {
             existing.put(p.getPid(), p);
         }
-
-        masterData.clear();
 
         for (ProcessInfo incoming : snapshot) {
             ProcessInfo old = existing.get(incoming.getPid());
 
             if (old != null) {
-                // KEEP OLD OBJECT (important)
-                masterData.add(old);
+
+                // 🔥 PRESERVE FLAG STATE (IMPORTANT)
+                if (old.isFlagged()) {
+                    incoming.flag(old.getFlagReason());
+                }
+
+                // replace old object safely
+                int index = masterData.indexOf(old);
+                if (index >= 0) {
+                    masterData.set(index, incoming);
+                }
+
             } else {
                 masterData.add(incoming);
             }
+        }
+
+        // remove processes that disappeared
+        masterData.removeIf(p ->
+                snapshot.stream().noneMatch(n -> n.getPid() == p.getPid())
+        );
+
+        if (selectedPid != null) {
+            processTable.getItems().stream()
+                    .filter(p -> p.getPid() == selectedPid)
+                    .findFirst()
+                    .ifPresentOrElse(
+                            p -> processTable.getSelectionModel().select(p),
+                            () -> {
+                                processTable.getSelectionModel().clearSelection();
+                                selectedPid = null;
+                            }
+                    );
         }
     }
 
