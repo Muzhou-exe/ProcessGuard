@@ -30,7 +30,7 @@ public class ProcessMonitor {
     private final AtomicBoolean isRunning = new AtomicBoolean(false);
 
     // Maintains the last known snapshot (thread-safe)
-    private static final ConcurrentHashMap<Long, ProcessInfo> lastSnapshot = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Long, ProcessInfo> lastSnapshot = new ConcurrentHashMap<>();
 
     // Observer list (CopyOnWriteArrayList for thread-safety)
     private final CopyOnWriteArrayList<ProcessListener> listeners = new CopyOnWriteArrayList<>();
@@ -186,7 +186,7 @@ public class ProcessMonitor {
     /**
      * Returns the current list of processes from the last snapshot.
      */
-    public static List<ProcessInfo> getCurrentProcesses() {
+    public List<ProcessInfo> getCurrentProcesses() {
         return new ArrayList<>(lastSnapshot.values());
     }
 

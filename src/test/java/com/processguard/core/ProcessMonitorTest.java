@@ -87,7 +87,7 @@ class ProcessMonitorTest {
     @Test
     void scanNow_getCurrentProcesses_returnsNonEmpty() {
         monitor.scanNow();
-        assertFalse(ProcessMonitor.getCurrentProcesses().isEmpty());
+        assertFalse(monitor.getCurrentProcesses().isEmpty());
     }
 
     @Test
