@@ -36,6 +36,8 @@ public class MainDashboard extends Application
         this.processMonitor = ProcessGuardMain.processMonitor;
         this.alertEngine = ProcessGuardMain.alertEngine;
 
+        tableManager.connectSidebar(alertSidebarManager);
+
         // Build UI components
         BorderPane root = new BorderPane();
         root.setTop(toolbarManager.createToolbar(primaryStage, tableManager));
