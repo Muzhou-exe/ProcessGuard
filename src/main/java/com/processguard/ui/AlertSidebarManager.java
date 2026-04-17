@@ -10,6 +10,8 @@ import javafx.geometry.Insets;
 import javafx.scene.control.*;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
+import javafx.scene.layout.StackPane;
+import javafx.scene.control.ScrollPane;
 
 import java.util.Optional;
 
@@ -18,8 +20,10 @@ public class AlertSidebarManager {
     private final VBox sidebar;
     private final ListView<AlertEvent> alertList;
     private final ObservableList<AlertEvent> alertData = FXCollections.observableArrayList();
-    private final Label detailsLabel;
     private final Button killButton;
+
+    private final Label detailsLabel;
+    private final ScrollPane detailsScroll;
 
     private ProcessInfo selectedProcess;
 
@@ -27,7 +31,15 @@ public class AlertSidebarManager {
         this.sidebar = new VBox(10);
         this.alertList = new ListView<>();
         this.detailsLabel = new Label("Select a process from the table...");
+        detailsScroll = new ScrollPane(detailsLabel);
         this.killButton = new Button("Kill Process");
+
+        detailsScroll.setFitToWidth(true);
+        detailsScroll.setFitToHeight(false);
+        detailsScroll.setPrefViewportHeight(250);
+        detailsScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        detailsScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        detailsScroll.setStyle("-fx-background-color: transparent;");
 
         initializeSidebar();
     }
@@ -50,7 +62,6 @@ public class AlertSidebarManager {
             -fx-border-width: 1;
             -fx-background-color: #fafafa;
         """);
-        detailsLabel.setPrefHeight(250);
 
         killButton.setDisable(true);
         killButton.setStyle("""
@@ -60,7 +71,7 @@ public class AlertSidebarManager {
         """);
         killButton.setOnAction(e -> killSelectedProcess());
 
-        sidebar.getChildren().addAll(alertsTitle, alertList, detailsTitle, detailsLabel, killButton);
+        sidebar.getChildren().addAll(alertsTitle, alertList, detailsTitle, detailsScroll, killButton);
         sidebar.setPrefWidth(320);
         sidebar.setPadding(new Insets(10));
     }
