@@ -15,57 +15,96 @@ public class CustomRule {
     private final String description;
     private boolean enabled;
     private final List<Condition> conditions;
-    private final String logicOperator;        // "AND" or "OR"
+    private final String logicOperator; // AND / OR
     private final Severity severity;
     private final String messageTemplate;
     private final int cooldownSeconds;
-    private final String action;               // e.g., "ALERT", "BLOCK", "LOG"
+    private final RuleAction action;
 
-    public CustomRule(long id, String name, String description, boolean enabled,
-                      List<Condition> conditions, String logicOperator,
-                      Severity severity, String messageTemplate,
-                      int cooldownSeconds, String action) {
-
+    public CustomRule(
+            long id,
+            String name,
+            String description,
+            boolean enabled,
+            List<Condition> conditions,
+            String logicOperator,
+            Severity severity,
+            String messageTemplate,
+            int cooldownSeconds,
+            RuleAction action
+    ) {
         this.id = id;
         this.name = Objects.requireNonNull(name, "Rule name cannot be null");
-        this.description = (description != null) ? description : "";
+        this.description = description != null ? description : "";
         this.enabled = enabled;
-        this.conditions = (conditions != null) ? new ArrayList<>(conditions) : new ArrayList<>();
-        this.logicOperator = ("OR".equalsIgnoreCase(logicOperator)) ? "OR" : "AND";
-        this.severity = Objects.requireNonNull(severity, "Severity cannot be null");
-        this.messageTemplate = (messageTemplate != null && !messageTemplate.isBlank())
-                ? messageTemplate : "Custom rule '" + name + "' violated";
-        this.cooldownSeconds = Math.max(0, cooldownSeconds);
-        this.action = (action != null) ? action.toUpperCase() : "ALERT";
-    }
+        this.conditions = conditions != null
+                ? new ArrayList<>(conditions)
+                : new ArrayList<>();
 
-    // -------------------------------------------------------------------------
-    // Getters & Setters
-    // -------------------------------------------------------------------------
+        this.logicOperator =
+                "OR".equalsIgnoreCase(logicOperator) ? "OR" : "AND";
+
+        this.severity =
+                Objects.requireNonNull(severity, "Severity cannot be null");
+
+        this.messageTemplate =
+                (messageTemplate != null && !messageTemplate.isBlank())
+                        ? messageTemplate
+                        : "Custom rule '" + name + "' violated";
+
+        this.cooldownSeconds = Math.max(0, cooldownSeconds);
+
+        this.action = (action != null) ? action : RuleAction.ALERT_ONLY;    }
+
+    // =========================================================
+    // GETTERS / SETTERS
+    // =========================================================
 
     public long getId() { return id; }
-    public String getName() { return name; }
-    public String getDescription() { return description; }
-    public boolean isEnabled() { return enabled; }
-    public void setEnabled(boolean enabled) { this.enabled = enabled; }
 
-    public List<Condition> getConditions() {
-        return new ArrayList<>(conditions); // defensive copy
+    public String getName() { return name; }
+
+    public String getDescription() { return description; }
+
+    public boolean isEnabled() { return enabled; }
+
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
     }
 
-    public String getLogicOperator() { return logicOperator; }
-    public Severity getSeverity() { return severity; }
-    public String getMessageTemplate() { return messageTemplate; }
-    public int getCooldownSeconds() { return cooldownSeconds; }
-    public String getAction() { return action; }
+    public List<Condition> getConditions() {
+        return new ArrayList<>(conditions);
+    }
 
-    // -------------------------------------------------------------------------
-    // Utility
-    // -------------------------------------------------------------------------
+    public String getLogicOperator() {
+        return logicOperator;
+    }
+
+    public Severity getSeverity() {
+        return severity;
+    }
+
+    public String getMessageTemplate() {
+        return messageTemplate;
+    }
+
+    public int getCooldownSeconds() {
+        return cooldownSeconds;
+    }
+
+    public RuleAction getAction() {
+        return action;
+    }
+
+    // =========================================================
+    // DEBUG / LOGGING
+    // =========================================================
 
     @Override
     public String toString() {
-        return String.format("CustomRule[id=%d, name=%s, enabled=%s, severity=%s]",
-                id, name, enabled, severity);
+        return String.format(
+                "CustomRule[id=%d, name=%s, enabled=%s, severity=%s, action=%s]",
+                id, name, enabled, severity, action
+        );
     }
 }
