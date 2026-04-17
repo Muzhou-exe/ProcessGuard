@@ -12,6 +12,7 @@ import com.processguard.core.HistoryStorage;
 import com.processguard.models.Status;
 import com.processguard.core.AppConfig;
 import com.processguard.core.ProcessKiller;
+import com.processguard.core.ReportExporter;
 import com.processguard.ui.RuleManagerDialog;
 
 // JavaFX imports
@@ -77,6 +78,8 @@ import java.util.HashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.nio.file.Path;
+import java.util.ArrayList;
 
 
 public class MainDashboard extends Application implements ProcessListener, AlertListener {
@@ -155,6 +158,34 @@ public class MainDashboard extends Application implements ProcessListener, Alert
         btnConfig.setOnAction(e -> {
             RuleManagerDialog dialog = new RuleManagerDialog(primaryStage);
             dialog.show();
+        });
+
+        btnExport.setOnAction(e -> {
+            List<ProcessInfo> snapshot = new ArrayList<>(masterData);
+            List<AlertEvent> alerts = historyStorage != null
+                    ? historyStorage.getRecentAlerts()
+                    : List.of();
+
+            new Thread(() -> {
+                try {
+                    Path reportPath = ReportExporter.export(snapshot, alerts);
+                    Platform.runLater(() -> {
+                        Alert info = new Alert(Alert.AlertType.INFORMATION);
+                        info.setTitle("Report Exported");
+                        info.setHeaderText("Report saved successfully");
+                        info.setContentText(reportPath.toString());
+                        info.showAndWait();
+                    });
+                } catch (Exception ex) {
+                    Platform.runLater(() -> {
+                        Alert err = new Alert(Alert.AlertType.ERROR);
+                        err.setTitle("Export Failed");
+                        err.setHeaderText("Could not write report");
+                        err.setContentText(ex.getMessage());
+                        err.showAndWait();
+                    });
+                }
+            }).start();
         });
 
         toolbar.getItems().addAll(

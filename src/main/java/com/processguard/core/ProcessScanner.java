@@ -14,6 +14,7 @@ import java.util.stream.Collectors;
 import java.util.Set;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Responsible for enumerating all running system processes and returning immutable ProcessInfo snapshots.
