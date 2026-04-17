@@ -73,6 +73,11 @@ public class ProcessTableManager {
         }
     }
 
+    public void connectSidebar(AlertSidebarManager sidebar) {
+        this.alertSidebarManager = sidebar;
+        sidebar.setMasterData(masterData);
+    }
+
     private TableColumn<ProcessInfo, Double> createCpuColumn(String name) {
         TableColumn<ProcessInfo, Double> col = new TableColumn<>(name);
         col.setCellValueFactory(new PropertyValueFactory<>("cpuUsage"));
@@ -160,6 +165,7 @@ public class ProcessTableManager {
                     .ifPresent(p -> {
                         if (p.isFlagged()) {
                             p.unflag();
+                            if (alertSidebarManager != null) alertSidebarManager.selectProcess(p);
                         } else {
                             processTable.getSelectionModel().select(p);
                             flagSelectedProcess();
@@ -277,7 +283,12 @@ public class ProcessTableManager {
             masterData.stream()
                     .filter(p -> p.getPid() == pid)
                     .findFirst()
-                    .ifPresent(p -> p.flag(reason));
+                    .ifPresent(p -> {
+                        p.flag(reason);
+                        if (alertSidebarManager != null) {
+                            alertSidebarManager.selectProcess(p);
+                        }
+                    });
 
             processTable.refresh();
         });
