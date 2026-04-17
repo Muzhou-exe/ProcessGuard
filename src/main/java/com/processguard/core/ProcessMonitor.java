@@ -115,11 +115,6 @@ public class ProcessMonitor {
                 historyStorage.saveSnapshot(currentSnapshot);
             }
 
-            List<ProcessInfo> sorted = currentSnapshot.stream()
-                    .sorted((a, b) -> Long.compare(b.getMemoryUsageMB(), a.getMemoryUsageMB()))
-                    .limit(20)
-                    .toList();
-
         } catch (Exception e) {
             System.err.println("Error during process scan cycle: " + e.getMessage());
             e.printStackTrace();
