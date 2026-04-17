@@ -1,6 +1,8 @@
 package com.processguard.core;
 
-import com.processguard.models.*;
+import com.processguard.models.Condition;
+import com.processguard.models.CustomRule;
+import com.processguard.models.ProcessInfo;
 
 import java.util.List;
 

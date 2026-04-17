@@ -1,8 +1,9 @@
 package com.processguard.core;
 
-import com.processguard.listeners.ProcessListener;
 import com.processguard.listeners.AlertListener;
-import com.processguard.models.*;
+import com.processguard.listeners.ProcessListener;
+import com.processguard.models.CustomRule;
+import com.processguard.models.ProcessInfo;
 
 import java.util.List;
 

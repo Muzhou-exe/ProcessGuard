@@ -34,7 +34,7 @@ public class HistoryStorage {
      * Saves current process snapshot to memory and disk.
      * @param currentSnapshot list of current system processes
      */
-    public void saveSnapshot(List<ProcessInfo> currentSnapshot) {
+    public synchronized void saveSnapshot(List<ProcessInfo> currentSnapshot) {
         snapshots.clear();
         snapshots.addAll(currentSnapshot);
 
@@ -67,7 +67,7 @@ public class HistoryStorage {
      * Returns list of stored snapshots.
      * @return list of process snapshots
      */
-    public List<ProcessInfo> getRecentSnapshots() {
+    public synchronized List<ProcessInfo> getRecentSnapshots() {
         return new ArrayList<>(snapshots);
     }
 
@@ -75,7 +75,7 @@ public class HistoryStorage {
      * Returns list of stored alerts.
      * @return list of alert events
      */
-    public List<AlertEvent> getRecentAlerts() {
+    public synchronized List<AlertEvent> getRecentAlerts() {
         return new ArrayList<>(alerts);
     }
 }

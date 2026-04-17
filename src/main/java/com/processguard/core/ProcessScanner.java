@@ -5,16 +5,15 @@ import com.processguard.models.Status;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
-import java.lang.management.ManagementFactory;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
-import java.util.Set;
-import java.util.Map;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Responsible for enumerating all running system processes and returning immutable ProcessInfo snapshots.
@@ -26,10 +25,16 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ProcessScanner {
 
     private static class ProcessMetrics {
+        String name;
         double cpu;
         long memoryMB;
 
         ProcessMetrics(double cpu, long memoryMB) {
+            this(null, cpu, memoryMB);
+        }
+
+        ProcessMetrics(String name, double cpu, long memoryMB) {
+            this.name = name;
             this.cpu = cpu;
             this.memoryMB = memoryMB;
         }
@@ -50,6 +55,8 @@ public class ProcessScanner {
     private final AppConfig config = AppConfig.getInstance();
 
     private final Map<Long, String> psNameCache = new ConcurrentHashMap<>();
+    private final Map<Long, Long> previousCpuMillis = new ConcurrentHashMap<>();
+    private long lastScanTimeMs = 0;
 
     /**
      * Returns snapshot of all running processes.
@@ -58,8 +65,13 @@ public class ProcessScanner {
     public List<ProcessInfo> scanProcesses() {
         List<ProcessInfo> processes = new ArrayList<>();
 
+        long currentTimeMs = System.currentTimeMillis();
+        long elapsedMs = (lastScanTimeMs > 0) ? (currentTimeMs - lastScanTimeMs) : 0;
+
         Map<Long, ProcessMetrics> metrics =
                 isWindows() ? scanMetricsWithTasklist() : scanMetricsWithPs();
+
+        Map<Long, Long> currentCpuMillis = new HashMap<>();
 
         ProcessHandle.allProcesses().forEach(handle -> {
             try {
@@ -70,9 +82,11 @@ public class ProcessScanner {
                         ? "unknown"
                         : executablePath.substring(executablePath.lastIndexOf(java.io.File.separator) + 1);
 
-                if (name.equals("unknown")) {
+                if (name.equals("unknown") && !isWindows()) {
                     ProcessInfo psFallback = psLookup(pid);
-                    name = psFallback != null ? psFallback.getName() : "unknown";
+                    if (psFallback != null) {
+                        name = psFallback.getName();
+                    }
                 }
 
                 long parentPid = handle.parent().map(ProcessHandle::pid).orElse(-1L);
@@ -80,11 +94,20 @@ public class ProcessScanner {
 
                 ProcessMetrics m = metrics.getOrDefault(pid, new ProcessMetrics(0.0, 0));
 
+                if (name.equals("unknown") && m.name != null && !m.name.isBlank()) {
+                    name = m.name;
+                }
+
+                double cpu = m.cpu;
+                if (cpu <= 0.0 && elapsedMs > 0) {
+                    cpu = estimateCpu(handle, pid, elapsedMs, currentCpuMillis);
+                }
+
                 processes.add(new ProcessInfo(
                         pid,
                         name,
                         executablePath,
-                        m.cpu,
+                        cpu,
                         m.memoryMB,
                         parentPid,
                         startTime
@@ -94,8 +117,37 @@ public class ProcessScanner {
             }
         });
 
+        previousCpuMillis.clear();
+        previousCpuMillis.putAll(currentCpuMillis);
+        lastScanTimeMs = currentTimeMs;
+
         classifyProcesses(processes);
         return processes;
+    }
+
+    /**
+     * Estimates CPU usage percentage from ProcessHandle.totalCpuDuration() delta.
+     * Used on Windows where tasklist does not provide CPU data.
+     */
+    private double estimateCpu(ProcessHandle handle, long pid,
+                               long elapsedMs, Map<Long, Long> currentCpuMillis) {
+        try {
+            Duration totalCpu = handle.info().totalCpuDuration().orElse(null);
+            if (totalCpu == null) return 0.0;
+
+            long currentMs = totalCpu.toMillis();
+            currentCpuMillis.put(pid, currentMs);
+
+            Long prevMs = previousCpuMillis.get(pid);
+            if (prevMs == null) return 0.0;
+
+            double deltaMs = currentMs - prevMs;
+            if (deltaMs < 0) return 0.0;
+
+            return (deltaMs / elapsedMs) * 100.0;
+        } catch (Exception e) {
+            return 0.0;
+        }
     }
 
     /**
@@ -119,6 +171,7 @@ public class ProcessScanner {
                     String[] parts = line.split("\",\"");
                     if (parts.length < 5) continue;
 
+                    String taskName = parts[0].replace("\"", "").trim();
                     long pid = Long.parseLong(parts[1].replace("\"", "").trim());
 
                     String memStr = parts[4]
@@ -129,7 +182,7 @@ public class ProcessScanner {
 
                     long memoryKB = Long.parseLong(memStr);
 
-                    metrics.put(pid, new ProcessMetrics(0.0, memoryKB / 1024));
+                    metrics.put(pid, new ProcessMetrics(taskName, 0.0, memoryKB / 1024));
                 }
             }
 
@@ -251,4 +304,5 @@ public class ProcessScanner {
         psNameCache.put(pid, null);
         return null;
     }
+
 }

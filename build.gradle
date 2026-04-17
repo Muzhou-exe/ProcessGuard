@@ -1,7 +1,7 @@
 plugins {
     id 'java'
     id 'application'
-    id 'com.gradleup.shadow' version '9.4.1'
+    id 'com.gradleup.shadow' version '9.4.1' // Latest shadow plugin
     id 'org.openjfx.javafxplugin' version '0.1.0'
 }
 
@@ -12,82 +12,72 @@ repositories {
     mavenCentral()
 }
 
-dependencies {
-    // Core libraries
-    implementation 'com.google.code.gson:gson:2.11.0'
-    implementation 'io.javalin:javalin:6.1.6'
-    implementation 'info.picocli:picocli:4.7.7'
-
-    // JavaFX modules
-    implementation 'org.openjfx:javafx-controls:21'
-    implementation 'org.openjfx:javafx-fxml:21'
-    implementation 'org.openjfx:javafx-graphics:21'
-
-    // Testing
-    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-}
-
-test {
-    useJUnitPlatform()
-}
-
-javafx {
-    version = "21"
-    modules = [ 'javafx.controls', 'javafx.fxml' ]
-}
-
-application {
-    mainClass = 'com.processguard.ProcessGuardMain'
-}
-
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
     }
 }
 
-// Shadow (fat jar) configuration
-tasks.shadowJar {
-    archiveBaseName.set('ProcessGuard')
-    archiveClassifier.set('')
-    archiveVersion.set(version)
-    manifest {
-        attributes 'Main-Class': application.mainClass.get()
+javafx {
+    version = "21"
+    modules = [ 'javafx.controls', 'javafx.fxml', 'javafx.graphics' ]
+}
+
+dependencies {
+    // 1. Multi-platform JavaFX logic (The fix for Windows/Mac/Linux compatibility)
+    def platforms = ['win', 'linux', 'mac']
+    platforms.each { platform ->
+        implementation "org.openjfx:javafx-controls:21:${platform}"
+        implementation "org.openjfx:javafx-fxml:21:${platform}"
+        implementation "org.openjfx:javafx-graphics:21:${platform}"
+        implementation "org.openjfx:javafx-base:21:${platform}"
     }
+
+    // Core libraries
+    implementation 'com.google.code.gson:gson:2.11.0'
+    implementation 'io.javalin:javalin:6.1.6'
+    implementation 'info.picocli:picocli:4.7.7'
+
+    // Testing
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
-tasks.named('startShadowScripts') {
-    dependsOn(tasks.named('jar'))
+application {
+    // 2. Point this to the Launcher class we're creating
+    mainClass = 'com.processguard.Launcher'
+    applicationDefaultJvmArgs = ["-Dprism.order=sw"]
 }
 
-// Ensure UTF-8 encoding
 tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
 }
 
-// Make distribution tasks depend on shadowJar
-tasks.named('distZip') {
-    dependsOn shadowJar
+tasks.shadowJar {
+    archiveBaseName.set('ProcessGuard')
+    archiveClassifier.set('')
+    archiveVersion.set(version)
+
+    manifest {
+        attributes 'Main-Class': 'com.processguard.Launcher'
+    }
+
+    // Essential for Javalin/Shadow compatibility
+    mergeServiceFiles()
+
+    // Fixes module system conflicts in fat JARs
+    exclude 'module-info.class'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
-tasks.named('distTar') {
-    dependsOn shadowJar
+// Ensure build always generates the fat JAR
+tasks.build {
+    dependsOn tasks.shadowJar
 }
 
-tasks.named('startScripts') {
-    dependsOn shadowJar
+test {
+    useJUnitPlatform()
 }
 
-tasks.named("startShadowScripts") {
-    enabled = false
-}
 
-tasks.named('shadowDistTar') {
-    dependsOn tasks.named('jar')
-}
-
-tasks.named('shadowDistZip') {
-    dependsOn tasks.named('jar')
-}
 

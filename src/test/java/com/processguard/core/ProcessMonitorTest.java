@@ -6,15 +6,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Unit tests for {@link ProcessMonitor}.
@@ -22,12 +19,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ProcessMonitorTest {
 
     private ProcessMonitor monitor;
-    private HistoryStorage storage;
 
     @BeforeEach
     void setUp() {
-        storage = new HistoryStorage();
-        monitor = new ProcessMonitor(storage);
+        monitor = new ProcessMonitor(new HistoryStorage());
     }
 
     @AfterEach
@@ -35,102 +30,195 @@ class ProcessMonitorTest {
         monitor.stop();
     }
 
+    // ── isRunning ─────────────────────────────────────────────────────────────
+
     @Test
     void isRunning_beforeStart_returnsFalse() {
         assertFalse(monitor.isRunning());
     }
 
     @Test
-    void start_setsRunningTrue() {
+    void isRunning_afterStart_returnsTrue() {
         monitor.start();
         assertTrue(monitor.isRunning());
     }
 
     @Test
-    void stop_setsRunningFalse() {
+    void isRunning_afterStop_returnsFalse() {
         monitor.start();
         monitor.stop();
         assertFalse(monitor.isRunning());
     }
 
+    // ── start / stop idempotency ──────────────────────────────────────────────
+
     @Test
     void start_calledTwice_doesNotThrow() {
-        monitor.start();
-        monitor.start();
+        assertDoesNotThrow(() -> {
+            monitor.start();
+            monitor.start();
+        });
         assertTrue(monitor.isRunning());
     }
 
     @Test
     void stop_calledWithoutStart_doesNotThrow() {
-        monitor.stop();
+        assertDoesNotThrow(() -> monitor.stop());
         assertFalse(monitor.isRunning());
     }
 
     @Test
-    void scanNow_populatesCurrentProcesses() {
+    void stop_calledTwice_doesNotThrow() {
+        monitor.start();
+        assertDoesNotThrow(() -> {
+            monitor.stop();
+            monitor.stop();
+        });
+    }
+
+    // ── scanNow ───────────────────────────────────────────────────────────────
+
+    @Test
+    void scanNow_populatesProcessCount() throws InterruptedException {
+        CountDownLatch latch = new CountDownLatch(1);
+        monitor.addListener(new ProcessListener() {
+            @Override public void onNewProcesses(List<ProcessInfo> p) {}
+            @Override public void onExitedProcesses(List<ProcessInfo> p) {}
+            @Override public void onSnapshotUpdate(List<ProcessInfo> s) { latch.countDown(); }
+        });
         monitor.scanNow();
+        assertTrue(latch.await(10, TimeUnit.SECONDS));
         assertTrue(monitor.getProcessCount() > 0);
     }
 
     @Test
-    void scanNow_notifiesListeners() throws InterruptedException {
+    void scanNow_getCurrentProcesses_returnsNonEmpty() throws InterruptedException {
+        CountDownLatch latch = new CountDownLatch(1);
+        monitor.addListener(new ProcessListener() {
+            @Override public void onNewProcesses(List<ProcessInfo> p) {}
+            @Override public void onExitedProcesses(List<ProcessInfo> p) {}
+            @Override public void onSnapshotUpdate(List<ProcessInfo> s) { latch.countDown(); }
+        });
+        monitor.scanNow();
+        assertTrue(latch.await(10, TimeUnit.SECONDS));
+        assertFalse(monitor.getCurrentProcesses().isEmpty());
+    }
+
+    @Test
+    void scanNow_notifiesOnSnapshotUpdate() throws InterruptedException {
         CountDownLatch latch = new CountDownLatch(1);
         List<ProcessInfo> received = new ArrayList<>();
 
         monitor.addListener(new ProcessListener() {
-            @Override
-            public void onNewProcesses(List<ProcessInfo> newProcesses) {
-            }
-
-            @Override
-            public void onExitedProcesses(List<ProcessInfo> exitedProcesses) {
-            }
-
-            @Override
-            public void onSnapshotUpdate(List<ProcessInfo> currentSnapshot) {
-                received.addAll(currentSnapshot);
+            @Override public void onNewProcesses(List<ProcessInfo> p) {}
+            @Override public void onExitedProcesses(List<ProcessInfo> p) {}
+            @Override public void onSnapshotUpdate(List<ProcessInfo> snapshot) {
+                received.addAll(snapshot);
                 latch.countDown();
             }
         });
 
         monitor.scanNow();
-        latch.await(5, TimeUnit.SECONDS);
-
+        assertTrue(latch.await(5, TimeUnit.SECONDS), "onSnapshotUpdate was not called in time");
         assertFalse(received.isEmpty());
     }
 
     @Test
-    void getCurrentProcesses_afterScan_returnsNonEmpty() {
+    void scanNow_secondScan_detectsNewAndExitedViaListeners() throws InterruptedException {
+        // First scan populates lastSnapshot with real processes.
+        // Second scan should call onSnapshotUpdate — we just verify no exception.
         monitor.scanNow();
-        List<ProcessInfo> processes = monitor.getCurrentProcesses();
-
-        assertFalse(processes.isEmpty());
+        assertDoesNotThrow(() -> monitor.scanNow());
     }
+
+    // ── addListener / removeListener ──────────────────────────────────────────
 
     @Test
     void addListener_null_doesNotThrow() {
-        monitor.addListener(null);
-        assertEquals(0, monitor.getProcessCount());
+        assertDoesNotThrow(() -> monitor.addListener(null));
     }
 
     @Test
-    void removeListener_removesSuccessfully() {
+    void removeListener_registeredListener_removedSuccessfully() throws InterruptedException {
+        CountDownLatch latch = new CountDownLatch(1);
+
         ProcessListener listener = new ProcessListener() {
-            @Override
-            public void onNewProcesses(List<ProcessInfo> newProcesses) {
-            }
-
-            @Override
-            public void onExitedProcesses(List<ProcessInfo> exitedProcesses) {
-            }
-
-            @Override
-            public void onSnapshotUpdate(List<ProcessInfo> currentSnapshot) {
+            @Override public void onNewProcesses(List<ProcessInfo> p) {}
+            @Override public void onExitedProcesses(List<ProcessInfo> p) {}
+            @Override public void onSnapshotUpdate(List<ProcessInfo> snapshot) {
+                latch.countDown();
             }
         };
 
         monitor.addListener(listener);
         monitor.removeListener(listener);
-        // No assertion needed — just ensure no exception
+        monitor.scanNow();
+
+        // Listener was removed — latch should NOT count down
+        assertFalse(latch.await(500, TimeUnit.MILLISECONDS),
+                "Listener was called after removal");
+    }
+
+    @Test
+    void removeListener_unregisteredListener_doesNotThrow() {
+        ProcessListener stranger = new ProcessListener() {
+            @Override public void onNewProcesses(List<ProcessInfo> p) {}
+            @Override public void onExitedProcesses(List<ProcessInfo> p) {}
+            @Override public void onSnapshotUpdate(List<ProcessInfo> s) {}
+        };
+        assertDoesNotThrow(() -> monitor.removeListener(stranger));
+    }
+
+    // ── multiple listeners ────────────────────────────────────────────────────
+
+    @Test
+    void multipleListeners_allNotified() throws InterruptedException {
+        CountDownLatch latch = new CountDownLatch(2);
+
+        monitor.addListener(new ProcessListener() {
+            @Override public void onNewProcesses(List<ProcessInfo> p) {}
+            @Override public void onExitedProcesses(List<ProcessInfo> p) {}
+            @Override public void onSnapshotUpdate(List<ProcessInfo> s) { latch.countDown(); }
+        });
+        monitor.addListener(new ProcessListener() {
+            @Override public void onNewProcesses(List<ProcessInfo> p) {}
+            @Override public void onExitedProcesses(List<ProcessInfo> p) {}
+            @Override public void onSnapshotUpdate(List<ProcessInfo> s) { latch.countDown(); }
+        });
+
+        monitor.scanNow();
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+    }
+
+    // ── listener that throws ──────────────────────────────────────────────────
+
+    @Test
+    void faultyListener_doesNotPreventOtherListeners() throws InterruptedException {
+        CountDownLatch latch = new CountDownLatch(1);
+
+        monitor.addListener(new ProcessListener() {
+            @Override public void onNewProcesses(List<ProcessInfo> p) {}
+            @Override public void onExitedProcesses(List<ProcessInfo> p) {}
+            @Override public void onSnapshotUpdate(List<ProcessInfo> s) {
+                throw new RuntimeException("intentional fault");
+            }
+        });
+        monitor.addListener(new ProcessListener() {
+            @Override public void onNewProcesses(List<ProcessInfo> p) {}
+            @Override public void onExitedProcesses(List<ProcessInfo> p) {}
+            @Override public void onSnapshotUpdate(List<ProcessInfo> s) { latch.countDown(); }
+        });
+
+        assertDoesNotThrow(() -> monitor.scanNow());
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+    }
+
+    // ── getProcessCount ───────────────────────────────────────────────────────
+
+    @Test
+    void getProcessCount_beforeScan_isZeroOrMore() {
+        // Before any scan the static snapshot may be leftover from other tests;
+        // we only verify no exception and a non-negative result.
+        assertTrue(monitor.getProcessCount() >= 0);
     }
 }

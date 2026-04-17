@@ -104,11 +104,16 @@ public class AlertEngine implements ProcessListener {
 
         if (alert != null &&
                 alertKey != null &&
-                !activeAlerts.contains(alertKey) &&
-                alertHistory.size() < 1000) {
+                !activeAlerts.contains(alertKey)) {
 
             activeAlerts.add(alertKey);
+
+            // Evict oldest entry when history is full
+            if (alertHistory.size() >= 1000) {
+                alertHistory.remove(0);
+            }
             alertHistory.add(alert);
+
             notifyAlertListeners(alert);
 
             if (historyStorage != null) {
