@@ -9,6 +9,7 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ToolBar;
 import javafx.stage.Stage;
+import javafx.scene.layout.HBox;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -24,6 +25,15 @@ public class ToolbarManager {
         Button btnRefresh = new Button("Refresh Now");
         Button btnConfig = new Button("Open Configuration");
         Button btnExport = new Button("Export Report");
+        Button closeBtn = new Button("Close App");
+
+        closeBtn.setOnAction(e -> primaryStage.close());
+
+        closeBtn.setStyle(
+                "-fx-background-color: #e74c3c;" +
+                        "-fx-text-fill: white;" +
+                        "-fx-font-weight: bold;"
+        );
 
         ProcessMonitor processMonitor = ProcessGuardMain.processMonitor;
 
@@ -97,7 +107,7 @@ public class ToolbarManager {
             }).start();
         });
 
-        toolbar.getItems().addAll(btnStart, btnStop, btnRefresh, btnConfig, btnExport);
+        toolbar.getItems().addAll(btnStart, btnStop, btnRefresh, btnConfig, btnExport, closeBtn);
         return toolbar;
     }
 }
