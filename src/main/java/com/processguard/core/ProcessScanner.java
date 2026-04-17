@@ -25,10 +25,16 @@ import java.util.concurrent.TimeUnit;
 public class ProcessScanner {
 
     private static class ProcessMetrics {
+        String name;
         double cpu;
         long memoryMB;
 
         ProcessMetrics(double cpu, long memoryMB) {
+            this(null, cpu, memoryMB);
+        }
+
+        ProcessMetrics(String name, double cpu, long memoryMB) {
+            this.name = name;
             this.cpu = cpu;
             this.memoryMB = memoryMB;
         }
@@ -49,7 +55,6 @@ public class ProcessScanner {
     private final AppConfig config = AppConfig.getInstance();
 
     private final Map<Long, String> psNameCache = new ConcurrentHashMap<>();
-    private final Map<Long, String> tasklistNameCache = new ConcurrentHashMap<>();
     private final Map<Long, Long> previousCpuMillis = new ConcurrentHashMap<>();
     private long lastScanTimeMs = 0;
 
@@ -77,15 +82,21 @@ public class ProcessScanner {
                         ? "unknown"
                         : executablePath.substring(executablePath.lastIndexOf(java.io.File.separator) + 1);
 
-                if (name.equals("unknown")) {
-                    ProcessInfo fallback = isWindows() ? tasklistLookup(pid) : psLookup(pid);
-                    name = fallback != null ? fallback.getName() : "unknown";
+                if (name.equals("unknown") && !isWindows()) {
+                    ProcessInfo psFallback = psLookup(pid);
+                    if (psFallback != null) {
+                        name = psFallback.getName();
+                    }
                 }
 
                 long parentPid = handle.parent().map(ProcessHandle::pid).orElse(-1L);
                 Instant startTime = handle.info().startInstant().orElse(Instant.EPOCH);
 
                 ProcessMetrics m = metrics.getOrDefault(pid, new ProcessMetrics(0.0, 0));
+
+                if (name.equals("unknown") && m.name != null && !m.name.isBlank()) {
+                    name = m.name;
+                }
 
                 double cpu = m.cpu;
                 if (cpu <= 0.0 && elapsedMs > 0) {
@@ -160,6 +171,7 @@ public class ProcessScanner {
                     String[] parts = line.split("\",\"");
                     if (parts.length < 5) continue;
 
+                    String taskName = parts[0].replace("\"", "").trim();
                     long pid = Long.parseLong(parts[1].replace("\"", "").trim());
 
                     String memStr = parts[4]
@@ -170,7 +182,7 @@ public class ProcessScanner {
 
                     long memoryKB = Long.parseLong(memStr);
 
-                    metrics.put(pid, new ProcessMetrics(0.0, memoryKB / 1024));
+                    metrics.put(pid, new ProcessMetrics(taskName, 0.0, memoryKB / 1024));
                 }
             }
 
@@ -293,43 +305,4 @@ public class ProcessScanner {
         return null;
     }
 
-    /**
-     * Looks up process name using tasklist command (Windows).
-     */
-    private ProcessInfo tasklistLookup(long pid) {
-        if (!isWindows()) return null;
-
-        if (tasklistNameCache.containsKey(pid)) {
-            String cachedName = tasklistNameCache.get(pid);
-            return cachedName != null
-                    ? new ProcessInfo(pid, cachedName, "", 0.0, 0, -1L, Instant.EPOCH)
-                    : null;
-        }
-
-        try {
-            Process process = new ProcessBuilder(
-                    CMD_TASKLIST, "/fi", "PID eq " + pid, "/fo", TASKLIST_FORMAT, TASKLIST_NOHEADER
-            ).start();
-
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                String line = reader.readLine();
-                if (line != null && !line.isBlank()) {
-                    String[] parts = line.split("\",\"");
-                    if (parts.length >= 2) {
-                        String name = parts[0].replace("\"", "").trim();
-                        if (!name.isBlank() && !name.equalsIgnoreCase("INFO")) {
-                            tasklistNameCache.put(pid, name);
-                            return new ProcessInfo(pid, name, "", 0.0, 0, -1L, Instant.EPOCH);
-                        }
-                    }
-                }
-            }
-
-        } catch (Exception e) {
-            System.err.println("tasklistLookup failed for PID " + pid + ": " + e.getMessage());
-        }
-
-        tasklistNameCache.put(pid, null);
-        return null;
-    }
 }
