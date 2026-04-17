@@ -11,11 +11,10 @@ import java.util.stream.Collectors;
 /**
  * Orchestrates periodic process scanning, detects process changes (new/exited),
  * classifies processes, and notifies registered observers using the Observer pattern.
+ *
  * Matches section 2.2 of the Software Design Document (SDD).
  */
 public class ProcessMonitor {
-
-    private static final String THREAD_NAME = "ProcessGuard-Monitor";
 
     private final ProcessScanner scanner;
     private final AppConfig config = AppConfig.getInstance();
@@ -24,7 +23,10 @@ public class ProcessMonitor {
     private ScheduledExecutorService scheduler;
     private final AtomicBoolean isRunning = new AtomicBoolean(false);
 
-    private final ConcurrentHashMap<Long, ProcessInfo> lastSnapshot = new ConcurrentHashMap<>();
+    // Maintains the last known snapshot (thread-safe)
+    private static final ConcurrentHashMap<Long, ProcessInfo> lastSnapshot = new ConcurrentHashMap<>();
+
+    // Observer list (CopyOnWriteArrayList for thread-safety)
     private final CopyOnWriteArrayList<ProcessListener> listeners = new CopyOnWriteArrayList<>();
 
     public ProcessMonitor(HistoryStorage historyStorage) {
@@ -33,8 +35,8 @@ public class ProcessMonitor {
     }
 
     /**
-     * Adds a process listener.
-     * @param listener observer to register
+     * Adds a listener (Observer pattern).
+     * Supports MainDashboard, AlertEngine, CustomRuleEngine, HistoryStorage, etc.
      */
     public void addListener(ProcessListener listener) {
         if (listener != null) {
@@ -43,33 +45,31 @@ public class ProcessMonitor {
     }
 
     /**
-     * Removes a process listener.
-     * @param listener observer to remove
+     * Removes a listener.
      */
     public void removeListener(ProcessListener listener) {
         listeners.remove(listener);
     }
 
     /**
-     * Starts process monitoring using configured scan interval.
+     * Starts the monitoring process with the configured scan interval.
      */
     public void start() {
         if (isRunning.compareAndSet(false, true)) {
             scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-                Thread t = new Thread(r, THREAD_NAME);
+                Thread t = new Thread(r, "ProcessGuard-Monitor");
                 t.setDaemon(false);
                 return t;
             });
 
             int interval = config.getScanIntervalSeconds();
-            scheduler.scheduleAtFixedRate(this::performScan, 0, interval, TimeUnit.SECONDS);
 
-            System.out.println("ProcessMonitor started with scan interval: " + interval + " seconds.");
+            scheduler.scheduleAtFixedRate(this::performScan, 0, interval, TimeUnit.SECONDS);
         }
     }
 
     /**
-     * Stops process monitoring safely.
+     * Stops the monitoring process.
      */
     public void stop() {
         if (isRunning.compareAndSet(true, false)) {
@@ -84,39 +84,44 @@ public class ProcessMonitor {
                     scheduler.shutdownNow();
                 }
             }
-            System.out.println("ProcessMonitor stopped.");
         }
     }
 
     /**
-     * Performs a single scan cycle of process detection and notification.
+     * Performs a single scan cycle: scan → diff → notify observers → persist.
      */
     private void performScan() {
         try {
             List<ProcessInfo> currentSnapshot = scanner.scanProcesses();
 
+            // Detect changes
             List<ProcessInfo> newProcesses = detectNewProcesses(currentSnapshot);
             List<ProcessInfo> exitedProcesses = detectExitedProcesses(currentSnapshot);
 
+            // Update last snapshot
             updateLastSnapshot(currentSnapshot);
+
+            // Notify all registered listeners (Observer pattern)
             notifyListeners(newProcesses, exitedProcesses, currentSnapshot);
 
+            // Persist the current snapshot via HistoryStorage
             if (historyStorage != null) {
                 historyStorage.saveSnapshot(currentSnapshot);
             }
 
-            System.out.println("\n=== SCAN CYCLE ===");
-            System.out.println("Processes: " + currentSnapshot.size());
+            List<ProcessInfo> sorted = currentSnapshot.stream()
+                    .sorted((a, b) -> Long.compare(b.getMemoryUsageMB(), a.getMemoryUsageMB()))
+                    .limit(20)
+                    .toList();
 
         } catch (Exception e) {
             System.err.println("Error during process scan cycle: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
     /**
-     * Detects newly started processes.
-     * @param current current process list
-     * @return list of new processes
+     * Detects newly started processes by comparing current PIDs with lastSnapshot.
      */
     private List<ProcessInfo> detectNewProcesses(List<ProcessInfo> current) {
         Set<Long> previousPids = lastSnapshot.keySet();
@@ -126,9 +131,7 @@ public class ProcessMonitor {
     }
 
     /**
-     * Detects exited processes.
-     * @param current current process list
-     * @return list of exited processes
+     * Detects processes that have exited since the last scan.
      */
     private List<ProcessInfo> detectExitedProcesses(List<ProcessInfo> current) {
         Set<Long> currentPids = current.stream()
@@ -141,21 +144,18 @@ public class ProcessMonitor {
     }
 
     /**
-     * Updates internal snapshot cache.
-     * @param currentSnapshot latest process list
+     * Updates the internal lastSnapshot map with the latest process information.
      */
     private void updateLastSnapshot(List<ProcessInfo> currentSnapshot) {
         lastSnapshot.clear();
         for (ProcessInfo p : currentSnapshot) {
+            // Store a defensive copy
             lastSnapshot.put(p.getPid(), p.copy());
         }
     }
 
     /**
-     * Notifies all registered listeners.
-     * @param newProcesses newly detected processes
-     * @param exitedProcesses removed processes
-     * @param currentSnapshot full snapshot
+     * Notifies all registered ProcessListeners using the Observer pattern.
      */
     private void notifyListeners(List<ProcessInfo> newProcesses,
                                  List<ProcessInfo> exitedProcesses,
@@ -163,42 +163,40 @@ public class ProcessMonitor {
 
         for (ProcessListener listener : listeners) {
             try {
-                if (!newProcesses.isEmpty()) listener.onNewProcesses(newProcesses);
-                if (!exitedProcesses.isEmpty()) listener.onExitedProcesses(exitedProcesses);
+                if (!newProcesses.isEmpty()) {
+                    listener.onNewProcesses(newProcesses);
+                }
+                if (!exitedProcesses.isEmpty()) {
+                    listener.onExitedProcesses(exitedProcesses);
+                }
                 listener.onSnapshotUpdate(currentSnapshot);
             } catch (Exception e) {
-                System.err.println("Error notifying listener " +
-                        listener.getClass().getSimpleName() + ": " + e.getMessage());
+                System.err.println("Error notifying listener " + listener.getClass().getSimpleName()
+                        + ": " + e.getMessage());
             }
         }
     }
 
     /**
-     * Returns current snapshot of processes.
-     * @return list of processes
+     * Returns the current list of processes from the last snapshot.
      */
-    public List<ProcessInfo> getCurrentProcesses() {
+    public static List<ProcessInfo> getCurrentProcesses() {
         return new ArrayList<>(lastSnapshot.values());
     }
 
     /**
-     * Returns whether monitoring is active.
-     * @return true if running
+     * Returns whether monitoring is currently active.
      */
     public boolean isRunning() {
         return isRunning.get();
     }
 
-    /**
-     * Triggers an immediate scan cycle.
-     */
     public void scanNow() {
         performScan();
     }
 
     /**
-     * Returns number of processes in last snapshot.
-     * @return process count
+     * Returns the number of processes in the last snapshot.
      */
     public int getProcessCount() {
         return lastSnapshot.size();

@@ -12,6 +12,7 @@ import com.processguard.core.HistoryStorage;
 import com.processguard.models.Status;
 import com.processguard.core.AppConfig;
 import com.processguard.core.ProcessKiller;
+import com.processguard.ui.RuleManagerDialog;
 
 // JavaFX imports
 import javafx.application.Application;
@@ -46,6 +47,14 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.MenuItem;
+import javafx.scene.input.Clipboard;
+import javafx.scene.input.ClipboardContent;
+import javafx.scene.input.Dragboard;
+import javafx.scene.input.TransferMode;
+import javafx.scene.input.DataFormat;
+import javafx.scene.control.ContextMenu;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.ListCell;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.WindowEvent;
@@ -69,6 +78,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+
 public class MainDashboard extends Application implements ProcessListener, AlertListener {
 
     private TableView<ProcessInfo> processTable;
@@ -88,6 +98,9 @@ public class MainDashboard extends Application implements ProcessListener, Alert
     private Button killButton;
 
     private VBox alertSidebar;
+
+    private long lastAlertUIUpdate = 0;
+    private static final long ALERT_UI_THROTTLE_MS = 30_000;
 
     public static void main(String[] args) {
         launch(args);
@@ -137,6 +150,11 @@ public class MainDashboard extends Application implements ProcessListener, Alert
             if (processMonitor != null) {
                 processMonitor.scanNow();
             }
+        });
+
+        btnConfig.setOnAction(e -> {
+            RuleManagerDialog dialog = new RuleManagerDialog(primaryStage);
+            dialog.show();
         });
 
         toolbar.getItems().addAll(
@@ -215,20 +233,52 @@ public class MainDashboard extends Application implements ProcessListener, Alert
         }
 
         // =========================
-        // ROW HIGHLIGHTING
+        // ROW FACTORY
         // =========================
         processTable.setRowFactory(tv -> {
             TableRow<ProcessInfo> row = new TableRow<>();
 
+            // =========================
+            // RIGHT CLICK MENU
+            // =========================
             ContextMenu contextMenu = new ContextMenu();
 
             MenuItem killItem = new MenuItem("Kill Process");
             MenuItem copyPidItem = new MenuItem("Copy PID");
             MenuItem detailsItem = new MenuItem("View Details");
 
-            // =========================
-            // KILL PROCESS
-            // =========================
+            // -------------------------
+            // Drag for custom rules
+            // -------------------------
+            row.setOnDragDetected(e -> {
+                if (row.isEmpty()) {
+                    return;
+                }
+
+                ProcessInfo p = row.getItem();
+                if (p == null) {
+                    return;
+                }
+
+                Dragboard db = row.startDragAndDrop(TransferMode.COPY);
+                ClipboardContent content = new ClipboardContent();
+
+                // Primary string (used by the drop handler in RuleManagerDialog)
+                content.putString(p.getName());
+
+                // Custom data using proper DataFormat
+                content.put(new DataFormat("process/pid"), p.getPid());
+                content.put(new DataFormat("process/cpu"), p.getCpuUsage());
+                content.put(new DataFormat("process/mem"), p.getMemoryUsageMB());
+                content.put(new DataFormat("process/name"), p.getName());   // optional but useful
+
+                db.setContent(content);
+                e.consume();
+            });
+
+            // -------------------------
+            // Kill process
+            // -------------------------
             killItem.setOnAction(e -> {
                 ProcessInfo p = row.getItem();
                 if (p == null) return;
@@ -241,55 +291,81 @@ public class MainDashboard extends Application implements ProcessListener, Alert
                 );
 
                 Optional<ButtonType> result = confirm.showAndWait();
-
                 if (result.isEmpty() || result.get() != ButtonType.OK) return;
 
                 new Thread(() -> ProcessKiller.kill(p.getPid())).start();
             });
 
-            // =========================
-            // COPY PID
-            // =========================
+            // -------------------------
+            // Copy PID
+            // -------------------------
             copyPidItem.setOnAction(e -> {
                 ProcessInfo p = row.getItem();
                 if (p == null) return;
 
-                javafx.scene.input.Clipboard clipboard =
-                        javafx.scene.input.Clipboard.getSystemClipboard();
-                javafx.scene.input.ClipboardContent content =
-                        new javafx.scene.input.ClipboardContent();
-
+                ClipboardContent content = new ClipboardContent();
                 content.putString(String.valueOf(p.getPid()));
-                clipboard.setContent(content);
+                Clipboard.getSystemClipboard().setContent(content);
             });
 
-            // =========================
-            // VIEW DETAILS
-            // =========================
+            // -------------------------
+            // View details
+            // -------------------------
             detailsItem.setOnAction(e -> {
                 ProcessInfo p = row.getItem();
                 if (p == null) return;
 
                 selectedProcess = p;
-
-                detailsLabel.setText(
-                        "PID: " + p.getPid() + "\n" +
-                                "Name: " + p.getName() + "\n" +
-                                "CPU: " + p.getCpuUsage() + "%\n" +
-                                "Memory: " + p.getMemoryUsageMB() + " MB\n" +
-                                "Status: " + p.getStatus() + "\n" +
-                                "Path: " + p.getExecutablePath()
-                );
-
                 killButton.setDisable(false);
+                updateDetailsPanel(p);
             });
 
             contextMenu.getItems().addAll(killItem, copyPidItem, detailsItem);
 
-            // Show menu only for non-empty rows
-            row.setOnContextMenuRequested(e -> {
+            // only show menu for non-empty rows
+            row.contextMenuProperty().bind(
+                    Bindings.when(row.emptyProperty())
+                            .then((ContextMenu) null)
+                            .otherwise(contextMenu)
+            );
+
+            // =========================
+            // ROW CLICK -> DETAILS PANEL
+            // =========================
+            row.setOnMouseClicked(e -> {
                 if (!row.isEmpty()) {
-                    contextMenu.show(row, e.getScreenX(), e.getScreenY());
+                    selectedProcess = row.getItem();
+                    killButton.setDisable(false);
+                    updateDetailsPanel(selectedProcess);
+                }
+            });
+
+            // =========================
+            // HIGHLIGHTING
+            // =========================
+            row.itemProperty().addListener((obs, oldItem, item) -> {
+                row.setStyle("");
+
+                if (item == null) return;
+
+                double cpuThreshold = AppConfig.getInstance().getCpuThreshold();
+                double memThreshold = AppConfig.getInstance().getMemoryThreshold();
+
+                Status effectiveStatus = item.getStatus();
+
+                if (effectiveStatus == Status.NORMAL &&
+                        (item.getCpuUsage() > cpuThreshold ||
+                                item.getMemoryUsageMB() > memThreshold)) {
+                    effectiveStatus = Status.SUSPICIOUS;
+                }
+
+                switch (effectiveStatus) {
+                    case BLOCKED ->
+                            row.setStyle("-fx-background-color: rgba(255,0,0,0.3);");
+                    case SUSPICIOUS ->
+                            row.setStyle("-fx-background-color: rgba(255,255,0,0.3);");
+                    default ->
+                            row.setStyle("");
                 }
             });
 
@@ -342,6 +418,59 @@ public class MainDashboard extends Application implements ProcessListener, Alert
 
         Label detailsTitle = new Label("Process Details");
         detailsTitle.setStyle("-fx-font-weight: bold;");
+
+        // ====================== IMPROVED ALERT LIST RENDERING ======================
+        alertList.setCellFactory(lv -> new ListCell<AlertEvent>() {
+            @Override
+            protected void updateItem(AlertEvent alert, boolean empty) {
+                super.updateItem(alert, empty);
+
+                if (empty || alert == null) {
+                    setText(null);
+                    setStyle("");
+                    return;
+                }
+
+                StringBuilder display = new StringBuilder();
+
+                // Timestamp
+                String time = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")
+                        .format(alert.getTimestamp().atZone(java.time.ZoneId.systemDefault()));
+
+                display.append("[").append(time).append("] ");
+
+                // Severity with color
+                switch (alert.getSeverity()) {
+                    case HIGH:
+                        display.append("🔴 HIGH | ");
+                        setStyle("-fx-text-fill: #d32f2f; -fx-font-weight: bold;");
+                        break;
+                    case MEDIUM:
+                        display.append("🟠 MEDIUM | ");
+                        setStyle("-fx-text-fill: #f57c00;");
+                        break;
+                    default:
+                        display.append("🟡 LOW | ");
+                        setStyle("-fx-text-fill: #1976d2;");
+                        break;
+                }
+
+                // Process name
+                display.append(alert.getProcess().getName());
+
+                // Show rule name if this alert came from a custom rule
+                if (alert.getTriggeringRule() != null) {
+                    display.append("  →  Rule: ").append(alert.getTriggeringRule().getName());
+                }
+
+                // Main message
+                if (alert.getMessage() != null && !alert.getMessage().isBlank()) {
+                    display.append(" - ").append(alert.getMessage());
+                }
+
+                setText(display.toString());
+            }
+        });
 
         detailsLabel = new Label("Select a process from the table...");
         detailsLabel.setWrapText(true);
@@ -459,6 +588,7 @@ public class MainDashboard extends Application implements ProcessListener, Alert
 
         processMonitor.addListener(this);
         alertEngine.addAlertListener(this);
+        ProcessGuardMain.customRuleEngine.addAlertListener(this);
     }
 
     // Helper to convert column names to camelCase for PropertyValueFactory
@@ -526,8 +656,19 @@ public class MainDashboard extends Application implements ProcessListener, Alert
     @Override
     public void onAlert(AlertEvent alert) {
         Platform.runLater(() -> {
-            alertData.add(0, alert); // newest at top
-            if (alertData.size() > 50) alertData.remove(50); // cap at 50
+            alertData.add(0, alert);
+
+            // Keep only latest 10 alerts
+            if (alertData.size() > 10) {
+                alertData.remove(10, alertData.size());
+            }
+
+            // Throttle UI refresh to every 30 seconds to avoid too-fast updates
+            long now = System.currentTimeMillis();
+            if (now - lastAlertUIUpdate > ALERT_UI_THROTTLE_MS) {
+                alertList.scrollTo(0);
+                lastAlertUIUpdate = now;
+            }
         });
     }
 
@@ -543,5 +684,30 @@ public class MainDashboard extends Application implements ProcessListener, Alert
         Platform.runLater(() -> {
             masterData.addAll(newProcesses);
         });
+    }
+
+    private void updateDetailsPanel(ProcessInfo p) {
+        if (p == null) {
+            detailsLabel.setText("Select a process from the table...");
+            return;
+        }
+
+        detailsLabel.setText("""
+        PID: %d
+        Name: %s
+        Path: %s
+        CPU: %.1f%%
+        Memory: %d MB
+        Parent PID: %d
+        Status: %s
+        """.formatted(
+                p.getPid(),
+                p.getName(),
+                p.getExecutablePath(),
+                p.getCpuUsage(),
+                p.getMemoryUsageMB(),
+                p.getParentPid(),
+                p.getStatus()
+        ));
     }
 }

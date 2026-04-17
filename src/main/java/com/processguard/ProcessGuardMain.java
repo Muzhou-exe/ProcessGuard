@@ -9,15 +9,17 @@ public class ProcessGuardMain {
     public static ProcessMonitor processMonitor;
     public static AlertEngine alertEngine;
     public static HistoryStorage historyStorage;
+    public static CustomRuleEngine customRuleEngine;
 
     public static void main(String[] args) {
 
         historyStorage = new HistoryStorage();
         processMonitor = new ProcessMonitor(historyStorage);
         alertEngine = new AlertEngine(historyStorage);
+        customRuleEngine = new CustomRuleEngine(historyStorage);
 
         processMonitor.addListener(alertEngine);
-        // any other listeners
+        processMonitor.addListener(customRuleEngine);
 
         processMonitor.start();
 

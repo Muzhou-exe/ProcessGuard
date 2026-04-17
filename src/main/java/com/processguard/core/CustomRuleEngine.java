@@ -2,85 +2,129 @@ package com.processguard.core;
 
 import com.processguard.listeners.ProcessListener;
 import com.processguard.models.*;
+import com.processguard.core.ProcessKiller;
+import com.processguard.models.RuleAction;
+import com.processguard.listeners.AlertListener;
+import java.util.ArrayList;
 
 import java.util.List;
 
 /**
- * Evaluates user-defined custom rules against system processes.
- * Processes rule conditions and generates alerts for violations.
+ * Custom Rule Engine
+ * - Evaluates user-defined rules against process snapshots
+ * - Stateless per evaluation cycle (safe + predictable)
  */
 public class CustomRuleEngine implements ProcessListener {
-
-    private static final String LOGIC_AND = "AND";
-    private static final String FIELD_NAME = "name";
-    private static final String FIELD_CPU = "cpuUsage";
-    private static final String FIELD_MEMORY = "memoryUsageMB";
-    private static final String OP_EQUALS = "EQUALS";
-    private static final String OP_CONTAINS = "CONTAINS";
-    private static final String OP_GT = "GREATER_THAN";
-    private static final String OP_LT = "LESS_THAN";
 
     private final HistoryStorage historyStorage;
     private final AppConfig config = AppConfig.getInstance();
 
-    /**
-     * Constructs CustomRuleEngine with history storage.
-     * @param historyStorage storage for generated alerts
-     */
+    private final List<AlertListener> alertListeners = new ArrayList<>();
+
     public CustomRuleEngine(HistoryStorage historyStorage) {
         this.historyStorage = historyStorage;
     }
 
-    /**
-     * Evaluates rules on newly detected processes.
-     * @param newProcesses list of new processes
-     */
+    // =========================================================
+    // PROCESS LISTENER CALLBACKS
+    // =========================================================
+
+    public void addAlertListener(AlertListener listener) {
+        alertListeners.add(listener);
+    }
+
+    private void notifyAlertListeners(AlertEvent alert) {
+        for (AlertListener listener : alertListeners) {
+            listener.onAlert(alert);
+        }
+    }
+
     @Override
     public void onNewProcesses(List<ProcessInfo> newProcesses) {
-        evaluateCustomRules(newProcesses);
+        evaluate(newProcesses);
     }
 
-    /**
-     * No action required when processes exit.
-     * @param exitedProcesses list of exited processes
-     */
     @Override
     public void onExitedProcesses(List<ProcessInfo> exitedProcesses) {
+        // no-op (could be used for audit logs later)
     }
 
-    /**
-     * Evaluates rules on full system snapshot.
-     * @param currentSnapshot current process list
-     */
     @Override
-    public void onSnapshotUpdate(List<ProcessInfo> currentSnapshot) {
-        evaluateCustomRules(currentSnapshot);
+    public void onSnapshotUpdate(List<ProcessInfo> snapshot) {
+        evaluate(snapshot);
     }
 
-    /**
-     * Evaluates all custom rules against given processes.
-     * @param processes list of processes to evaluate
-     */
-    private void evaluateCustomRules(List<ProcessInfo> processes) {
+    // =========================================================
+    // CORE ENGINE
+    // =========================================================
+
+    private void evaluate(List<ProcessInfo> processes) {
+        System.out.println("CustomRuleEngine evaluating " + processes.size() + " processes");
+
         List<CustomRule> rules = config.getCustomRules();
+        if (rules == null || rules.isEmpty()) return;
 
         for (ProcessInfo process : processes) {
             for (CustomRule rule : rules) {
 
                 if (!rule.isEnabled()) continue;
 
-                if (matchesRule(process, rule)) {
+                System.out.println("ACTION = " + rule.getAction()
+                        + " for rule " + rule.getName());
 
-                    AlertEvent alert = new AlertEvent(
-                            System.currentTimeMillis(),
-                            process,
-                            AlertType.CUSTOM_RULE_VIOLATION,
-                            rule.getSeverity(),
-                            rule.getMessageTemplate()
-                    );
+                if (matches(process, rule)) {
 
-                    if (historyStorage != null) {
-                        historyStorage.saveAlert(alert);
+                    RuleAction action = rule.getAction();
+
+                    // =========================
+                    // 1. LOG ONLY
+                    // =========================
+                    if (action == RuleAction.LOG_ONLY) {
+                        System.out.println("[RULE LOG] " + process);
+
+                        // =========================
+                        // 2. ALERT ONLY
+                        // =========================
+                    } else if (action == null || action == RuleAction.ALERT_ONLY) {
+                        AlertEvent alert = new AlertEvent(
+                                System.currentTimeMillis(),
+                                process,
+                                AlertType.CUSTOM_RULE_VIOLATION,
+                                rule.getSeverity(),
+                                rule.getMessageTemplate()
+                        );
+
+                        if (historyStorage != null) {
+                            historyStorage.saveAlert(alert);
+                        }
+                        notifyAlertListeners(alert);  // ← FIX: notify regardless of storage
+
+                        // =========================
+                        // 3. KILL PROCESS
+                        // =========================
+                    } else if (action == RuleAction.KILL_PROCESS) {
+                        AlertEvent alert = new AlertEvent(
+                                System.currentTimeMillis(),
+                                process,
+                                AlertType.CUSTOM_RULE_VIOLATION,
+                                rule.getSeverity(),
+                                rule.getDescription() != null ? rule.getDescription() : "Custom rule violated",
+                                rule
+                        );
+
+                        if (historyStorage != null) {
+                            historyStorage.saveAlert(alert);
+                        }
+                        notifyAlertListeners(alert);
+
+                        try {
+                            boolean killed = ProcessKiller.kill(process.getPid());
+                            if (!killed) {
+                                System.err.println("Failed to kill process: " + process.getPid());
+                            }
+                        } catch (Exception e) {
+                            System.err.println("Kill action failed: " + e.getMessage());
+                        }
                     }
 
                     break;
@@ -89,113 +133,125 @@ public class CustomRuleEngine implements ProcessListener {
         }
     }
 
-    /**
-     * Checks if a process matches a custom rule.
-     * @param process process to evaluate
-     * @param rule rule definition
-     * @return true if rule matches
-     */
-    private boolean matchesRule(ProcessInfo process, CustomRule rule) {
-        boolean result = rule.getLogicOperator().equalsIgnoreCase(LOGIC_AND);
+    // =========================================================
+    // RULE MATCHING
+    // =========================================================
 
-        for (Condition condition : rule.getConditions()) {
-            boolean match = evaluateCondition(process, condition);
+    private boolean matches(ProcessInfo process, CustomRule rule) {
 
-            if (rule.getLogicOperator().equalsIgnoreCase(LOGIC_AND)) {
-                result &= match;
-            } else {
-                result |= match;
+        List<Condition> conditions = rule.getConditions();
+        if (conditions == null || conditions.isEmpty()) {
+            return false;
+        }
+
+        String logic = rule.getLogicOperator();
+
+        if ("AND".equalsIgnoreCase(logic)) return matchesAll(process, conditions);
+        if ("OR".equalsIgnoreCase(logic)) return matchesAny(process, conditions);
+
+        return false;
+    }
+
+    private boolean matchesAll(ProcessInfo process, List<Condition> conditions) {
+        for (Condition c : conditions) {
+            if (!evaluateCondition(process, c)) {
+                return false;
             }
         }
-
-        return result;
+        return true;
     }
 
-    /**
-     * Evaluates a single condition against a process.
-     * @param process process being evaluated
-     * @param condition condition to check
-     * @return true if condition matches
-     */
-    private boolean evaluateCondition(ProcessInfo process, Condition condition) {
-
-        String field = condition.getField();
-        String operator = condition.getOperator();
-        String value = condition.getValue();
-
-        switch (field) {
-
-            case FIELD_NAME:
-                return compareString(process.getName(), operator, value);
-
-            case FIELD_CPU:
-                return compareDouble(process.getCpuUsage(), operator, safeParse(value));
-
-            case FIELD_MEMORY:
-                return compareDouble(process.getMemoryUsageMB(), operator, safeParse(value));
-
-            default:
-                return false;
+    private boolean matchesAny(ProcessInfo process, List<Condition> conditions) {
+        for (Condition c : conditions) {
+            if (evaluateCondition(process, c)) {
+                return true;
+            }
         }
+        return false;
     }
 
-    /**
-     * Compares string values using rule operator.
-     * @param actual actual value
-     * @param operator comparison operator
-     * @param expected expected value
-     * @return true if condition matches
-     */
-    private boolean compareString(String actual, String operator, String expected) {
+    // =========================================================
+    // CONDITION EVALUATION
+    // =========================================================
 
-        switch (operator) {
+    private boolean evaluateCondition(ProcessInfo p, Condition c) {
 
-            case OP_EQUALS:
-                return actual.equalsIgnoreCase(expected);
+        String field = c.getField();
+        String op = c.getOperator();
+        String value = c.getValue();
 
-            case OP_CONTAINS:
-                return actual.toLowerCase().contains(expected.toLowerCase());
-
-            default:
-                return false;
-        }
-    }
-
-    /**
-     * Compares numeric values using rule operator.
-     * @param actual actual value
-     * @param operator comparison operator
-     * @param expected expected value
-     * @return true if condition matches
-     */
-    private boolean compareDouble(double actual, String operator, double expected) {
-
-        switch (operator) {
-
-            case OP_GT:
-                return actual > expected;
-
-            case OP_LT:
-                return actual < expected;
-
-            case OP_EQUALS:
-                return actual == expected;
-
-            default:
-                return false;
-        }
-    }
-
-    /**
-     * Safely parses string to double, returns 0 if invalid.
-     * @param value input string
-     * @return parsed double or 0
-     */
-    private double safeParse(String value) {
         try {
-            return Double.parseDouble(value);
+            return switch (field) {
+
+                case "name" -> compareString(p.getName(), op, value);
+
+                case "cpuUsage" -> compareDouble(p.getCpuUsage(), op, parseDouble(value));
+
+                case "memoryUsageMB" -> compareDouble(p.getMemoryUsageMB(), op, parseDouble(value));
+
+                case "pid" -> compareLong(p.getPid(), op, parseLong(value));
+
+                case "parentPid" -> compareLong(p.getParentPid(), op, parseLong(value));
+
+                case "executablePath" -> compareString(p.getExecutablePath(), op, value);
+
+                default -> false;
+            };
         } catch (Exception e) {
-            return 0.0;
+            // NEVER crash engine due to bad rule config
+            return false;
+        }
+    }
+
+    // =========================================================
+    // TYPE COMPARISONS
+    // =========================================================
+
+    private boolean compareString(String actual, String op, String expected) {
+        if (actual == null) return false;
+
+        return switch (op.toUpperCase()) {
+            case "EQUALS" -> actual.equalsIgnoreCase(expected);
+            case "CONTAINS" -> actual.toLowerCase().contains(expected.toLowerCase());
+            default -> false;
+        };
+    }
+
+    private boolean compareDouble(double actual, String op, double expected) {
+        return switch (op.toUpperCase()) {
+            case "GREATER_THAN" -> actual > expected;
+            case "LESS_THAN" -> actual < expected;
+            case "EQUALS" -> Math.abs(actual - expected) < 0.0001;
+            default -> false;
+        };
+    }
+
+    private boolean compareLong(long actual, String op, long expected) {
+        return switch (op.toUpperCase()) {
+            case "GREATER_THAN" -> actual > expected;
+            case "LESS_THAN" -> actual < expected;
+            case "EQUALS" -> Math.abs(actual - expected) < 0.0001;
+            default -> false;
+        };
+    }
+
+    // =========================================================
+    // SAFE PARSING
+    // =========================================================
+
+    private double parseDouble(String v) {
+        try {
+            return Double.parseDouble(v);
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    private long parseLong(String v) {
+        try {
+            return Long.parseLong(v);
+        } catch (Exception e) {
+            return 0;
         }
     }
 }

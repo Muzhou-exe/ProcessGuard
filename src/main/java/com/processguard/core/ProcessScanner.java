@@ -5,14 +5,22 @@ import com.processguard.models.Status;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.lang.management.ManagementFactory;
 import java.time.Instant;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import java.util.Set;
+import java.util.Map;
+import java.util.HashMap;
 
 /**
- * Responsible for enumerating system processes and building ProcessInfo snapshots.
- * Uses Java ProcessHandle API with OS-specific fallbacks for metrics.
+ * Responsible for enumerating all running system processes and returning immutable ProcessInfo snapshots.
+ * Primary API: Java 9+ ProcessHandle.allProcesses()
+ * Fallback for memory/CPU details: Windows tasklist command via ProcessBuilder (as specified in SDD section 2.1).
+ *
+ * Thread safety: Stateless — safe for concurrent calls.
  */
 public class ProcessScanner {
 
