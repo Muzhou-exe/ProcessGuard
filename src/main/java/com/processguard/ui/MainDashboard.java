@@ -36,6 +36,14 @@ public class MainDashboard extends Application
         this.processMonitor = ProcessGuardMain.processMonitor;
         this.alertEngine = ProcessGuardMain.alertEngine;
 
+        primaryStage.setOnCloseRequest(e -> {
+            if (processMonitor != null) {
+                processMonitor.stop();
+            }
+            javafx.application.Platform.exit();
+            System.exit(0);
+        });
+
         tableManager.connectSidebar(alertSidebarManager);
 
         // Build UI components
