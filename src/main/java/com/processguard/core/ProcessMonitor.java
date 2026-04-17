@@ -64,7 +64,7 @@ public class ProcessMonitor {
         if (isRunning.compareAndSet(false, true)) {
             scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
                 Thread t = new Thread(r, "ProcessGuard-Monitor");
-                t.setDaemon(false);
+                t.setDaemon(true);
                 return t;
             });
 
