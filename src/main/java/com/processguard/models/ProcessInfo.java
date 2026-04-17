@@ -21,7 +21,7 @@ public class ProcessInfo {
     private Status status;                  // mutable only for classification
 
     private boolean flagged = false;
-    private String flagReason = "";
+    private String flagReason = null;
 
     /**
      * Constructs a new ProcessInfo snapshot.
@@ -154,7 +154,7 @@ public class ProcessInfo {
      */
     public void flag(String reason) {
         this.flagged = true;
-        this.flagReason = (reason != null) ? reason : "";
+        this.flagReason = reason;
     }
 
     /**
@@ -162,6 +162,6 @@ public class ProcessInfo {
      */
     public void unflag() {
         this.flagged = false;
-        this.flagReason = "";
+        this.flagReason = null;
     }
 }
