@@ -192,8 +192,12 @@ public class ProcessMonitor {
         return isRunning.get();
     }
 
+    /**
+     * Triggers an immediate scan on a background thread.
+     * Safe to call from the JavaFX application thread.
+     */
     public void scanNow() {
-        performScan();
+        new Thread(this::performScan, "ProcessGuard-ManualScan").start();
     }
 
     /**
