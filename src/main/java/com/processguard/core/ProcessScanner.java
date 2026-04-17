@@ -26,10 +26,16 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ProcessScanner {
 
     private static class ProcessMetrics {
+        String name;
         double cpu;
         long memoryMB;
 
         ProcessMetrics(double cpu, long memoryMB) {
+            this(null, cpu, memoryMB);
+        }
+
+        ProcessMetrics(String name, double cpu, long memoryMB) {
+            this.name = name;
             this.cpu = cpu;
             this.memoryMB = memoryMB;
         }
@@ -70,15 +76,19 @@ public class ProcessScanner {
                         ? "unknown"
                         : executablePath.substring(executablePath.lastIndexOf(java.io.File.separator) + 1);
 
+                ProcessMetrics m = metrics.getOrDefault(pid, new ProcessMetrics(0.0, 0));
+
                 if (name.equals("unknown")) {
-                    ProcessInfo psFallback = psLookup(pid);
-                    name = psFallback != null ? psFallback.getName() : "unknown";
+                    if (m.name != null && !m.name.isBlank()) {
+                        name = m.name;
+                    } else {
+                        ProcessInfo psFallback = psLookup(pid);
+                        name = psFallback != null ? psFallback.getName() : "unknown";
+                    }
                 }
 
                 long parentPid = handle.parent().map(ProcessHandle::pid).orElse(-1L);
                 Instant startTime = handle.info().startInstant().orElse(Instant.EPOCH);
-
-                ProcessMetrics m = metrics.getOrDefault(pid, new ProcessMetrics(0.0, 0));
 
                 processes.add(new ProcessInfo(
                         pid,
@@ -119,6 +129,7 @@ public class ProcessScanner {
                     String[] parts = line.split("\",\"");
                     if (parts.length < 5) continue;
 
+                    String taskName = parts[0].replace("\"", "").trim();
                     long pid = Long.parseLong(parts[1].replace("\"", "").trim());
 
                     String memStr = parts[4]
@@ -129,7 +140,7 @@ public class ProcessScanner {
 
                     long memoryKB = Long.parseLong(memStr);
 
-                    metrics.put(pid, new ProcessMetrics(0.0, memoryKB / 1024));
+                    metrics.put(pid, new ProcessMetrics(taskName, 0.0, memoryKB / 1024));
                 }
             }
 
