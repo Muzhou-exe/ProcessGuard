@@ -40,13 +40,16 @@ public class AppConfig {
     private boolean enableSystemTray = true;
     private List<CustomRule> customRules = new ArrayList<>();
 
-    // Private constructor for Singleton pattern (synchronized lazy initialization)
+    /**
+     * Private constructor for Singleton pattern (synchronized lazy initialization).
+     */
     private AppConfig() {
         loadConfig();
     }
 
     /**
      * Returns the single instance of AppConfig (thread-safe lazy initialization).
+     * @return singleton instance of AppConfig
      */
     public static AppConfig getInstance() {
         if (instance == null) {
@@ -60,8 +63,7 @@ public class AppConfig {
     }
 
     /**
-     * Loads configuration from ~/.processguard/config.json.
-     * Creates default config if file does not exist.
+     * Loads configuration from ~/.processguard/config.json or creates defaults if missing.
      */
     private void loadConfig() {
         try {
@@ -93,12 +95,11 @@ public class AppConfig {
                     }
                 }
             } else {
-                // Create default configuration and save it
                 saveConfig();
             }
         } catch (Exception e) {
             System.err.println("Warning: Failed to load config. Using defaults. Error: " + e.getMessage());
-            saveConfig(); // Save defaults on failure
+            saveConfig();
         }
     }
 
@@ -127,41 +128,69 @@ public class AppConfig {
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Getters and Setters (with automatic save on mutation where appropriate)
-    // -------------------------------------------------------------------------
-
+    /**
+     * Returns scan interval in seconds.
+     * @return scan interval seconds
+     */
     public int getScanIntervalSeconds() {
         return scanIntervalSeconds;
     }
 
+    /**
+     * Sets scan interval in seconds.
+     * @param scanIntervalSeconds interval value (minimum 1)
+     */
     public void setScanIntervalSeconds(int scanIntervalSeconds) {
         this.scanIntervalSeconds = Math.max(1, scanIntervalSeconds);
         saveConfig();
     }
 
+    /**
+     * Returns CPU usage threshold.
+     * @return CPU threshold
+     */
     public double getCpuThreshold() {
         return cpuThreshold;
     }
 
+    /**
+     * Sets CPU usage threshold.
+     * @param cpuThreshold threshold value (minimum 0)
+     */
     public void setCpuThreshold(double cpuThreshold) {
         this.cpuThreshold = Math.max(0.0, cpuThreshold);
         saveConfig();
     }
 
+    /**
+     * Returns memory usage threshold in MB.
+     * @return memory threshold
+     */
     public double getMemoryThreshold() {
         return memoryThreshold;
     }
 
+    /**
+     * Sets memory usage threshold in MB.
+     * @param memoryThreshold threshold value (minimum 0)
+     */
     public void setMemoryThreshold(double memoryThreshold) {
         this.memoryThreshold = Math.max(0.0, memoryThreshold);
         saveConfig();
     }
 
+    /**
+     * Returns blacklist copy.
+     * @return set of blacklisted process names
+     */
     public Set<String> getBlacklist() {
-        return new HashSet<>(blacklist); // defensive copy
+        return new HashSet<>(blacklist);
     }
 
+    /**
+     * Adds process to blacklist.
+     * @param processName process name
+     */
     public void addToBlacklist(String processName) {
         if (processName != null && !processName.isBlank()) {
             blacklist.add(processName.trim());
@@ -169,15 +198,27 @@ public class AppConfig {
         }
     }
 
+    /**
+     * Removes process from blacklist.
+     * @param processName process name
+     */
     public void removeFromBlacklist(String processName) {
         blacklist.remove(processName);
         saveConfig();
     }
 
+    /**
+     * Returns whitelist copy.
+     * @return set of whitelisted process names
+     */
     public Set<String> getWhitelist() {
-        return new HashSet<>(whitelist); // defensive copy
+        return new HashSet<>(whitelist);
     }
 
+    /**
+     * Adds process to whitelist.
+     * @param processName process name
+     */
     public void addToWhitelist(String processName) {
         if (processName != null && !processName.isBlank()) {
             whitelist.add(processName.trim());
@@ -185,42 +226,78 @@ public class AppConfig {
         }
     }
 
+    /**
+     * Removes process from whitelist.
+     * @param processName process name
+     */
     public void removeFromWhitelist(String processName) {
         whitelist.remove(processName);
         saveConfig();
     }
 
+    /**
+     * Returns web server port.
+     * @return port number
+     */
     public int getWebPort() {
         return webPort;
     }
 
+    /**
+     * Sets web server port.
+     * @param webPort port (1024–65535)
+     */
     public void setWebPort(int webPort) {
         this.webPort = (webPort > 1024 && webPort < 65536) ? webPort : 8080;
         saveConfig();
     }
 
+    /**
+     * Returns whether app starts minimized.
+     * @return start minimized flag
+     */
     public boolean isStartMinimized() {
         return startMinimized;
     }
 
+    /**
+     * Sets start minimized flag.
+     * @param startMinimized flag value
+     */
     public void setStartMinimized(boolean startMinimized) {
         this.startMinimized = startMinimized;
         saveConfig();
     }
 
+    /**
+     * Returns whether system tray is enabled.
+     * @return system tray enabled flag
+     */
     public boolean isEnableSystemTray() {
         return enableSystemTray;
     }
 
+    /**
+     * Sets system tray enabled flag.
+     * @param enableSystemTray flag value
+     */
     public void setEnableSystemTray(boolean enableSystemTray) {
         this.enableSystemTray = enableSystemTray;
         saveConfig();
     }
 
+    /**
+     * Returns custom rules copy.
+     * @return list of custom rules
+     */
     public List<CustomRule> getCustomRules() {
-        return new ArrayList<>(customRules); // defensive copy
+        return new ArrayList<>(customRules);
     }
 
+    /**
+     * Sets custom rules list.
+     * @param customRules list of rules
+     */
     public void setCustomRules(List<CustomRule> customRules) {
         this.customRules.clear();
         if (customRules != null) {
@@ -229,6 +306,10 @@ public class AppConfig {
         saveConfig();
     }
 
+    /**
+     * Adds a custom rule.
+     * @param rule custom rule
+     */
     public void addCustomRule(CustomRule rule) {
         if (rule != null) {
             this.customRules.add(rule);

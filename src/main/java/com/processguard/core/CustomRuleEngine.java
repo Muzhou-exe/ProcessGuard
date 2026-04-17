@@ -18,6 +18,10 @@ public class CustomRuleEngine implements ProcessListener {
     private final RuleEvaluator evaluator;
     private final RuleActionExecutor executor;
 
+    /**
+     * Constructs CustomRuleEngine with history storage dependency.
+     * @param historyStorage storage used by rule actions
+     */
     public CustomRuleEngine(HistoryStorage historyStorage) {
         this.evaluator = new RuleEvaluator();
         this.executor = new RuleActionExecutor(historyStorage);
@@ -38,10 +42,18 @@ public class CustomRuleEngine implements ProcessListener {
         evaluate(snapshot);
     }
 
+    /**
+     * Registers an alert listener for rule-triggered alerts.
+     * @param listener alert listener
+     */
     public void addAlertListener(AlertListener listener) {
         executor.addAlertListener(listener);
     }
 
+    /**
+     * Evaluates processes against enabled custom rules.
+     * @param processes list of processes to evaluate
+     */
     private void evaluate(List<ProcessInfo> processes) {
         System.out.println("CustomRuleEngine evaluating " + processes.size() + " processes");
 
@@ -55,7 +67,7 @@ public class CustomRuleEngine implements ProcessListener {
 
                 if (evaluator.matches(process, rule)) {
                     executor.execute(process, rule);
-                    break; // same behavior as before
+                    break;
                 }
             }
         }

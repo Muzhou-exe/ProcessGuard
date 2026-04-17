@@ -29,10 +29,18 @@ public class AlertEngine implements ProcessListener {
 
     private final Set<String> activeAlerts = ConcurrentHashMap.newKeySet();
 
+    /**
+     * Constructs AlertEngine with history storage dependency.
+     * @param historyStorage storage used for persisting alerts
+     */
     public AlertEngine(HistoryStorage historyStorage) {
         this.historyStorage = historyStorage;
     }
 
+    /**
+     * Adds an alert listener to receive generated alerts.
+     * @param listener listener to register
+     */
     public void addAlertListener(AlertListener listener) {
         if (listener != null) {
             alertListeners.add(listener);
@@ -131,6 +139,10 @@ public class AlertEngine implements ProcessListener {
         }
     }
 
+    /**
+     * Notifies all registered listeners of a new alert.
+     * @param alert alert event to broadcast
+     */
     private void notifyAlertListeners(AlertEvent alert) {
         for (AlertListener listener : alertListeners) {
             try {
@@ -141,10 +153,18 @@ public class AlertEngine implements ProcessListener {
         }
     }
 
+    /**
+     * Generates a unique alert ID based on timestamp.
+     * @return generated alert ID
+     */
     private long generateAlertId() {
         return System.currentTimeMillis();
     }
 
+    /**
+     * Returns immutable copy of alert history.
+     * @return list of stored alerts
+     */
     public List<AlertEvent> getAlertHistory() {
         return new ArrayList<>(alertHistory);
     }

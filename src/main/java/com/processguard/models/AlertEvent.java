@@ -15,12 +15,17 @@ public class AlertEvent {
     private final Severity severity;
     private final String message;
     private final Instant timestamp;
-    private final CustomRule triggeringRule;   // null for normal alerts
+    private final CustomRule triggeringRule;
     private boolean acknowledged;
 
-    // =========================================================
-    // NORMAL ALERT CONSTRUCTOR
-    // =========================================================
+    /**
+     * Creates a normal alert event without a triggering custom rule.
+     * @param id alert id
+     * @param process associated process
+     * @param type alert type
+     * @param severity alert severity
+     * @param message alert message
+     */
     public AlertEvent(
             long id,
             ProcessInfo process,
@@ -31,9 +36,15 @@ public class AlertEvent {
         this(id, process, type, severity, message, null);
     }
 
-    // =========================================================
-    // CUSTOM RULE ALERT CONSTRUCTOR
-    // =========================================================
+    /**
+     * Creates an alert event with an optional triggering custom rule.
+     * @param id alert id
+     * @param process associated process
+     * @param type alert type
+     * @param severity alert severity
+     * @param message alert message
+     * @param triggeringRule rule that triggered alert (nullable)
+     */
     public AlertEvent(
             long id,
             ProcessInfo process,
@@ -56,51 +67,82 @@ public class AlertEvent {
         this.acknowledged = false;
     }
 
-    // =========================================================
-    // GETTERS
-    // =========================================================
+    /**
+     * Returns alert id.
+     * @return alert id
+     */
     public long getId() {
         return id;
     }
 
+    /**
+     * Returns associated process.
+     * @return process info
+     */
     public ProcessInfo getProcess() {
         return process;
     }
 
+    /**
+     * Returns alert type.
+     * @return alert type
+     */
     public AlertType getType() {
         return type;
     }
 
+    /**
+     * Returns severity level.
+     * @return severity
+     */
     public Severity getSeverity() {
         return severity;
     }
 
+    /**
+     * Returns alert message.
+     * @return message
+     */
     public String getMessage() {
         return message;
     }
 
+    /**
+     * Returns timestamp of alert creation.
+     * @return timestamp
+     */
     public Instant getTimestamp() {
         return timestamp;
     }
 
+    /**
+     * Returns triggering custom rule if present.
+     * @return triggering rule or null
+     */
     public CustomRule getTriggeringRule() {
         return triggeringRule;
     }
 
+    /**
+     * Checks whether alert has been acknowledged.
+     * @return acknowledged state
+     */
     public boolean isAcknowledged() {
         return acknowledged;
     }
 
-    // =========================================================
-    // SETTERS
-    // =========================================================
+    /**
+     * Sets acknowledged state.
+     * @param acknowledged acknowledgement flag
+     */
     public void setAcknowledged(boolean acknowledged) {
         this.acknowledged = acknowledged;
     }
 
-    // =========================================================
-    // UI DISPLAY HELPER
-    // =========================================================
+    /**
+     * Returns UI display message.
+     * @return formatted message
+     */
     public String getDisplayMessage() {
         if (triggeringRule != null) {
             return triggeringRule.getName() + " - " + message;

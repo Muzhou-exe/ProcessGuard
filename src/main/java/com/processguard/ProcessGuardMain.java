@@ -7,6 +7,9 @@ import com.processguard.core.ProcessMonitor;
 import com.processguard.ui.MainDashboard;
 import javafx.application.Application;
 
+/**
+ * Entry point for ProcessGuard application that initializes core services and launches the UI.
+ */
 public class ProcessGuardMain {
 
     public static ProcessMonitor processMonitor;
@@ -14,6 +17,10 @@ public class ProcessGuardMain {
     public static HistoryStorage historyStorage;
     public static CustomRuleEngine customRuleEngine;
 
+    /**
+     * Main method that initializes system components and starts the application.
+     * @param args command-line arguments
+     */
     public static void main(String[] args) {
 
         historyStorage = new HistoryStorage();

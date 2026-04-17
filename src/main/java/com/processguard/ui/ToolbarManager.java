@@ -9,14 +9,24 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ToolBar;
 import javafx.stage.Stage;
-import javafx.scene.layout.HBox;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Builds and manages the main application toolbar for ProcessGuard.
+ * Provides controls for monitoring, refreshing, configuration, reporting, and application exit.
+ */
 public class ToolbarManager {
 
+    /**
+     * Creates the main toolbar with all monitoring and control actions.
+     *
+     * @param primaryStage the main application stage used for window control and dialogs
+     * @param tableManager the process table manager used to access current process snapshot
+     * @return configured ToolBar instance for the dashboard UI
+     */
     public ToolBar createToolbar(Stage primaryStage, ProcessTableManager tableManager) {
         ToolBar toolbar = new ToolBar();
 
@@ -55,13 +65,11 @@ public class ToolbarManager {
             }
         });
 
-        // Open Configuration - RuleManagerDialog is in the same package
         btnConfig.setOnAction(e -> {
             RuleManagerDialog dialog = new RuleManagerDialog(primaryStage);
             dialog.show();
         });
 
-        // ====================== Export Report (PDF) ======================
         btnExport.setOnAction(e -> {
             List<ProcessInfo> snapshot = tableManager.getCurrentData();
             List<com.processguard.models.AlertEvent> alerts =

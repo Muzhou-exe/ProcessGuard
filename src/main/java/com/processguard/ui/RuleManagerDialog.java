@@ -28,6 +28,9 @@ import javafx.stage.Stage;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * UI dialog for creating, viewing, and managing custom process detection rules.
+ */
 public class RuleManagerDialog {
 
     private final Stage stage;
@@ -39,9 +42,12 @@ public class RuleManagerDialog {
     private final TextField valueField;
     private final ComboBox<String> fieldBox;
     private final ComboBox<String> opBox;
-
     private final ComboBox<RuleAction> actionBox;
 
+    /**
+     * Constructs the RuleManagerDialog and initializes UI components.
+     * @param owner the parent stage that owns this dialog
+     */
     public RuleManagerDialog(Stage owner) {
         stage = new Stage();
         stage.initOwner(owner);
@@ -52,8 +58,12 @@ public class RuleManagerDialog {
         ruleList = new ListView<>(ruleData);
         ruleList.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
 
-        // Custom cell to show rule name and enabled status
         ruleList.setCellFactory(lv -> new ListCell<>() {
+            /**
+             * Renders each rule item in the list view.
+             * @param rule the rule item
+             * @param empty whether the cell is empty
+             */
             @Override
             protected void updateItem(CustomRule rule, boolean empty) {
                 super.updateItem(rule, empty);
@@ -66,7 +76,6 @@ public class RuleManagerDialog {
             }
         });
 
-        // Form controls
         nameField = new TextField();
         nameField.setPromptText("Enter a descriptive rule name");
 
@@ -86,7 +95,6 @@ public class RuleManagerDialog {
         ));
         actionBox.setValue(RuleAction.ALERT_ONLY);
 
-        // Buttons
         Button btnAdd = new Button("Add Rule");
         Button btnSample = new Button("Add Sample Rule");
         Button btnDelete = new Button("Delete Selected");
@@ -97,11 +105,9 @@ public class RuleManagerDialog {
         btnDelete.setOnAction(e -> deleteSelectedRule());
         btnToggle.setOnAction(e -> toggleSelectedRule());
 
-        // Disable buttons when no rule is selected
         btnDelete.disableProperty().bind(ruleList.getSelectionModel().selectedItemProperty().isNull());
         btnToggle.disableProperty().bind(ruleList.getSelectionModel().selectedItemProperty().isNull());
 
-        // Layout
         VBox formBox = new VBox(8,
                 new Label("Create New Rule"),
                 new Label("Rule Name:"), nameField,
@@ -119,7 +125,6 @@ public class RuleManagerDialog {
         );
         listBox.setPadding(new Insets(15));
 
-        // Drag hint
         Label dragHint = new Label("💡 Tip: Drag a process from the main ProcessGuard window into this dialog to auto-fill the rule");
         dragHint.setStyle("-fx-font-style: italic; -fx-text-fill: #555555;");
 
@@ -132,7 +137,6 @@ public class RuleManagerDialog {
         root.setCenter(centerArea);
         root.setBottom(buttonBar);
 
-        // Drag & Drop
         root.setOnDragOver(e -> {
             if (e.getDragboard().hasString()) {
                 e.acceptTransferModes(TransferMode.COPY);
@@ -162,17 +166,25 @@ public class RuleManagerDialog {
         refresh();
     }
 
+    /**
+     * Displays the rule manager window.
+     */
     public void show() {
         refresh();
         stage.show();
         stage.toFront();
     }
 
+    /**
+     * Refreshes the rule list from application config.
+     */
     private void refresh() {
         ruleData.setAll(AppConfig.getInstance().getCustomRules());
     }
 
-    // ====================== ADD RULE ======================
+    /**
+     * Adds a rule based on user input fields.
+     */
     private void addRuleFromFields() {
         String name = (nameField.getText() == null ? "" : nameField.getText()).trim();
         String valueStr = (valueField.getText() == null ? "" : valueField.getText()).trim();
@@ -202,7 +214,6 @@ public class RuleManagerDialog {
             refresh();
             showAlert("Success", "Rule created successfully:\n" + name);
 
-            // Clear form after successful add (optional but recommended)
             nameField.clear();
             valueField.clear();
 
@@ -212,6 +223,9 @@ public class RuleManagerDialog {
         }
     }
 
+    /**
+     * Adds a predefined sample rule.
+     */
     private void addSampleRule() {
         try {
             CustomRule rule = new CustomRule(
@@ -238,6 +252,9 @@ public class RuleManagerDialog {
         }
     }
 
+    /**
+     * Deletes the currently selected rule.
+     */
     private void deleteSelectedRule() {
         CustomRule selected = ruleList.getSelectionModel().getSelectedItem();
         if (selected == null) return;
@@ -252,6 +269,9 @@ public class RuleManagerDialog {
         }
     }
 
+    /**
+     * Toggles enabled/disabled state of selected rule.
+     */
     private void toggleSelectedRule() {
         CustomRule selected = ruleList.getSelectionModel().getSelectedItem();
         if (selected == null) return;
@@ -265,6 +285,11 @@ public class RuleManagerDialog {
         }
     }
 
+    /**
+     * Shows an alert dialog with a message.
+     * @param title alert title
+     * @param message alert content
+     */
     private void showAlert(String title, String message) {
         Alert alert = new Alert(Alert.AlertType.INFORMATION, message, ButtonType.OK);
         alert.setTitle(title);

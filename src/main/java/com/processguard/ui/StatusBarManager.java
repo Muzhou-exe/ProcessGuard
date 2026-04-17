@@ -11,6 +11,10 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
+/**
+ * Manages the bottom status bar UI in the ProcessGuard dashboard.
+ * Displays real-time system summary metrics such as CPU usage, memory usage, and process counts.
+ */
 public class StatusBarManager {
 
     private final HBox statusBar = new HBox(10);
@@ -20,6 +24,9 @@ public class StatusBarManager {
     private final Label cpuSummaryLabel = new Label("CPU: 0%");
     private final Label memSummaryLabel = new Label("Memory: 0MB");
 
+    /**
+     * Initializes the status bar UI components and layout.
+     */
     public StatusBarManager() {
         statusBar.setPadding(new Insets(5));
         statusBar.getChildren().addAll(
@@ -28,6 +35,10 @@ public class StatusBarManager {
         );
     }
 
+    /**
+     * Updates the status bar using the latest process snapshot.
+     * @param snapshot list of current running processes
+     */
     public void updateStatus(List<ProcessInfo> snapshot) {
         totalProcessesLabel.setText("Processes: " + snapshot.size());
 
@@ -52,6 +63,10 @@ public class StatusBarManager {
                 suspiciousCount, blockedCount));
     }
 
+    /**
+     * Returns the JavaFX status bar container node.
+     * @return HBox containing status labels
+     */
     public HBox getStatusBar() {
         return statusBar;
     }
