@@ -1,6 +1,10 @@
 package com.processguard.core;
 
-import com.processguard.models.*;
+import com.processguard.models.AlertEvent;
+import com.processguard.models.AlertType;
+import com.processguard.models.CustomRule;
+import com.processguard.models.ProcessInfo;
+import com.processguard.models.RuleAction;
 import com.processguard.listeners.AlertListener;
 
 import java.util.ArrayList;

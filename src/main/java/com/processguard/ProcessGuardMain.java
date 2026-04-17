@@ -1,6 +1,9 @@
 package com.processguard;
 
-import com.processguard.core.*;
+import com.processguard.core.AlertEngine;
+import com.processguard.core.CustomRuleEngine;
+import com.processguard.core.HistoryStorage;
+import com.processguard.core.ProcessMonitor;
 import com.processguard.ui.MainDashboard;
 import javafx.application.Application;
 
