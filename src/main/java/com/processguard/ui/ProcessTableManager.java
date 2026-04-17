@@ -124,6 +124,9 @@ public class ProcessTableManager {
 
     private ContextMenu createContextMenu(TableRow<ProcessInfo> row) {
         ContextMenu menu = new ContextMenu();
+        MenuItem flagItem = new MenuItem("Flag Process");
+
+        flagItem.setOnAction(e -> flagSelectedProcess());
 
         MenuItem killItem = new MenuItem("Kill Process");
         MenuItem copyPidItem = new MenuItem("Copy PID");
@@ -153,7 +156,7 @@ public class ProcessTableManager {
             if (alertSidebarManager != null) alertSidebarManager.selectProcess(row.getItem());
         });
 
-        menu.getItems().addAll(killItem, copyPidItem, detailsItem);
+        menu.getItems().addAll(killItem, copyPidItem, detailsItem, flagItem);
         return menu;
     }
 
@@ -165,6 +168,12 @@ public class ProcessTableManager {
     }
 
     private void applyRowHighlighting(TableRow<ProcessInfo> row, ProcessInfo item) {
+        if (item != null && item.isFlagged()) {
+            row.setTooltip(new Tooltip("🚩 " + item.getFlagReason()));
+            row.setStyle("-fx-background-color: rgba(0, 120, 255, 0.35);");
+            return;
+        }
+
         if (item == null) {
             row.setStyle("");
             return;
@@ -184,6 +193,24 @@ public class ProcessTableManager {
             case SUSPICIOUS -> row.setStyle("-fx-background-color: rgba(255,255,0,0.3);");
             default -> row.setStyle("");
         }
+    }
+
+    public void flagSelectedProcess() {
+        ProcessInfo selected = processTable.getSelectionModel().getSelectedItem();
+
+        if (selected == null) {
+            System.out.println("No process selected");
+            return;
+        }
+
+        TextInputDialog dialog = new TextInputDialog();
+        dialog.setTitle("Flag Process");
+        dialog.setHeaderText("Enter reason for flagging process " + selected.getName());
+
+        dialog.showAndWait().ifPresent(reason -> {
+            selected.flag(reason);
+            processTable.refresh();
+        });
     }
 
     public TableView<ProcessInfo> getTable() {
