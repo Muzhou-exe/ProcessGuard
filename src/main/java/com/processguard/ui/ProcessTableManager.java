@@ -133,13 +133,75 @@ public class ProcessTableManager {
 
     private ContextMenu createContextMenu(TableRow<ProcessInfo> row) {
         ContextMenu menu = new ContextMenu();
-        MenuItem flagItem = new MenuItem("Flag Process");
-
-        flagItem.setOnAction(e -> flagSelectedProcess());
-
-        MenuItem killItem = new MenuItem("Kill Process");
+        MenuItem flagItem    = new MenuItem("Flag Process");
+        MenuItem killItem    = new MenuItem("Kill Process");
         MenuItem copyPidItem = new MenuItem("Copy PID");
         MenuItem detailsItem = new MenuItem("View Details");
+
+        final Long[] capturedPid = { null };
+
+        menu.setOnShowing(e -> {
+            ProcessInfo item = row.getItem();
+            if (item == null) {
+                menu.hide();
+                return;
+            }
+
+            capturedPid[0] = item.getPid();
+            flagItem.setText(item.isFlagged() ? "Unflag Process" : "Flag Process");
+        });
+
+        flagItem.setOnAction(e -> {
+            if (capturedPid[0] == null) return;
+
+            masterData.stream()
+                    .filter(p -> p.getPid() == capturedPid[0])
+                    .findFirst()
+                    .ifPresent(p -> {
+                        if (p.isFlagged()) {
+                            p.unflag();
+                        } else {
+                            processTable.getSelectionModel().select(p);
+                            flagSelectedProcess();
+                        }
+                    });
+
+            processTable.refresh();
+        });
+
+        killItem.setOnAction(e -> {
+            if (capturedPid[0] == null) return;
+
+            masterData.stream()
+                    .filter(p -> p.getPid() == capturedPid[0])
+                    .findFirst()
+                    .ifPresent(p -> {
+                        if (alertSidebarManager != null) {
+                            alertSidebarManager.killProcess(p);
+                        }
+                    });
+        });
+
+        copyPidItem.setOnAction(e -> {
+            if (capturedPid[0] == null) return;
+
+            ClipboardContent content = new ClipboardContent();
+            content.putString(String.valueOf(capturedPid[0]));
+            Clipboard.getSystemClipboard().setContent(content);
+        });
+
+        detailsItem.setOnAction(e -> {
+            if (capturedPid[0] == null) return;
+
+            masterData.stream()
+                    .filter(p -> p.getPid() == capturedPid[0])
+                    .findFirst()
+                    .ifPresent(p -> {
+                        if (alertSidebarManager != null) {
+                            alertSidebarManager.selectProcess(p);
+                        }
+                    });
+        });
 
         row.setOnDragDetected(e -> {
             if (row.isEmpty()) return;
@@ -155,14 +217,6 @@ public class ProcessTableManager {
             content.put(new DataFormat("process/name"), p.getName());
             db.setContent(content);
             e.consume();
-        });
-
-        killItem.setOnAction(e -> {
-            if (alertSidebarManager != null) alertSidebarManager.killProcess(row.getItem());
-        });
-        copyPidItem.setOnAction(e -> copyPidToClipboard(row.getItem()));
-        detailsItem.setOnAction(e -> {
-            if (alertSidebarManager != null) alertSidebarManager.selectProcess(row.getItem());
         });
 
         menu.getItems().addAll(killItem, copyPidItem, detailsItem, flagItem);
@@ -244,7 +298,6 @@ public class ProcessTableManager {
 
             if (old != null) {
 
-                // 🔥 PRESERVE FLAG STATE (IMPORTANT)
                 if (old.isFlagged()) {
                     incoming.flag(old.getFlagReason());
                 }
@@ -266,16 +319,11 @@ public class ProcessTableManager {
         );
 
         if (selectedPid != null) {
+            final Long pidToReselect = selectedPid;
             processTable.getItems().stream()
-                    .filter(p -> p.getPid() == selectedPid)
+                    .filter(p -> p.getPid() == pidToReselect)
                     .findFirst()
-                    .ifPresentOrElse(
-                            p -> processTable.getSelectionModel().select(p),
-                            () -> {
-                                processTable.getSelectionModel().clearSelection();
-                                selectedPid = null;
-                            }
-                    );
+                    .ifPresent(p -> processTable.getSelectionModel().select(p));
         }
     }
 
