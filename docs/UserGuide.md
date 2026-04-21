@@ -104,27 +104,7 @@ On first launch, ProcessGuard creates a configuration directory at `~/.processgu
 
 ## 4. Understanding the Interface
 
-The ProcessGuard window is divided into four main areas:
-
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│  [Start] [Stop] [Refresh] [Open Configuration] [Export Report] [X]   │  ← TOOLBAR
-├───────────────────────────────────────────────────┬──────────────────┤
-│                                                   │  ALERTS          │
-│  PID | Name | Path | CPU% | Mem MB | Status | ... │  [12:01:05] 🔴   │
-│  ──────────────────────────────────────────────── │  HIGH | chrome   │
-│  1234 | chrome.exe | C:\...  | 82.3% | 620 MB |  S │                  │
-│  5678 | code.exe   | C:\...  |  3.1% | 320 MB |  N │  Process Details │
-│  9999 | bad.exe    | C:\...  |  0.2% |  12 MB |  B │  PID: 1234       │
-│  ...                                              │  Name: chrome    │
-│                                                   │  CPU: 82.3%      │
-│                PROCESS TABLE                      │  Mem: 620 MB     │
-│                                                   │                  │
-│                                                   │  [Kill Process]  │
-├───────────────────────────────────────────────────┴──────────────────┤
-│  Suspicious: 2 | Blocked: 1   Processes: 187  CPU: 94.2%  Mem: 3420MB │  ← STATUS BAR
-└──────────────────────────────────────────────────────────────────────┘
-```
+![ProcessGuard UI](images/UI.png)
 
 ### 4.1 Toolbar (Top)
 
