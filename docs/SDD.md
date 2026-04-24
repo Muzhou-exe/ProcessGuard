@@ -2,7 +2,7 @@
 
 ---
 
-1. SYSTEM OVERVIEW
+1.SYSTEM OVERVIEW
    ============================================================
 
 ProcessGuard is a real-time process monitoring system that continuously scans system processes, evaluates them against both built-in and user-defined rules, and triggers alerts or automated actions.
@@ -21,7 +21,7 @@ ProcessScanner --> ProcessMonitor --> Rule Engines --> Alert System --> UI
 
 -----
 
-2. ARCHITECTURE DESIGN
+2.ARCHITECTURE DESIGN
    ============================================================
 
 LAYERED ARCHITECTURE:
@@ -29,7 +29,7 @@ LAYERED ARCHITECTURE:
 
 -----
 
-3. FULL CLASS DIAGRAM
+3.FULL CLASS DIAGRAM
    ============================================================
 ![Class Diagram](architecture/ClassDiagram.png)
 ------------------------------------------------------------
@@ -39,7 +39,7 @@ MODEL RELATIONSHIPS
 
 -----
 
-4. SEQUENCE DIAGRAM
+4.SEQUENCE DIAGRAM
    ============================================================
 ![Sequence Diagram](architecture/SequenceDiagram.png)
 
