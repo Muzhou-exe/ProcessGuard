@@ -14,291 +14,86 @@ Core capabilities:
 - Persistent history storage
 - Interactive UI dashboard
 
-------------------------------------------------------------
 HIGH-LEVEL FLOW
 ------------------------------------------------------------
 
 ProcessScanner --> ProcessMonitor --> Rule Engines --> Alert System --> UI
 
-============================================================
+-----
+
 2. ARCHITECTURE DESIGN
    ============================================================
 
 LAYERED ARCHITECTURE:
-```
-+----------------------------------------------------------+
-|                        UI LAYER                          |
-|----------------------------------------------------------|
-| MainDashboard                                            |
-| ProcessTableManager  AlertSidebarManager                 |
-| StatusBarManager     ToolbarManager                      |
-| RuleManagerDialog                                        |
-+----------------------------------------------------------+
-|                        CORE LAYER                        |
-|----------------------------------------------------------|
-| ProcessMonitor     AlertEngine                           |
-| CustomRuleEngine   RuleEvaluator                         |
-| RuleActionExecutor ReportExporter                        |
-+----------------------------------------------------------+
-|                     SERVICE LAYER                        |
-|----------------------------------------------------------|
-| ProcessScanner     ProcessKiller                         |
-| HistoryStorage     AppConfig                             |
-+----------------------------------------------------------+
-|                     MODEL LAYER                          |
-|----------------------------------------------------------|
-| ProcessInfo  AlertEvent  CustomRule  Condition           |
-| Status       Severity    RuleAction  AlertType           |
-+----------------------------------------------------------+
-```
+![Architecture Design](architecture/ArchitectureOverview.png)
 
-============================================================
+-----
+
 3. FULL CLASS DIAGRAM
    ============================================================
-```
-                     +----------------------+
-                     |  ProcessMonitor      |
-                     |----------------------|
-                     | -scanner             |
-                     | -listeners           |
-                     | -lastSnapshot        |
-                     |----------------------|
-                     | +start()             |
-                     | +stop()              |
-                     | +scanNow()           |
-                     +----------+-----------+
-                                |
-                                | uses
-                                v
-                     +----------------------+
-                     |  ProcessScanner      |
-                     |----------------------|
-                     | +scanProcesses()     |
-                     | +getOwnPid()         |
-                     +----------------------+
-
-                                |
-                                | notifies
-                                v
-
-   +-------------------------------------------------------------+
-   |                  ProcessListener (interface)                |
-   |-------------------------------------------------------------|
-   | +onNewProcesses()                                           |
-   | +onExitedProcesses()                                        |
-   | +onSnapshotUpdate()                                         |
-   +-------------------+-------------------+---------------------+
-   |                   |
-   |                   |
-   v                   v
-
-         +------------------------+    +------------------------+
-         |     AlertEngine        |    |   CustomRuleEngine     |
-         |------------------------|    |------------------------|
-         | -activeAlerts          |    | -ruleEvaluator         |
-         | -alertHistory          |    | -actionExecutor        |
-         |------------------------|    |------------------------|
-         | +onSnapshotUpdate()    |    | +onSnapshotUpdate()    |
-         | +addAlertListener()    |    +-----------+------------+
-         +-----------+------------+                |
-                     |                             | delegates
-                     |                             v
-                     |                 +-------------------------+
-                     |                 |    RuleEvaluator        |
-                     |                 |-------------------------|
-                     |                 | +matches()              |
-                     |                 +-------------------------+
-                     |
-                     |                             |
-                     |                             v
-                     |                 +-------------------------+
-                     |                 | RuleActionExecutor      |
-                     |                 |-------------------------|
-                     |                 | +execute()              |
-                     |                 +-----------+-------------+
-                     |                             |
-                     |                             v
-                     |                 +-------------------------+
-                     |                 |   ProcessKiller         |
-                     |                 |-------------------------|
-                     |                 | +kill(pid)              |
-                     |                 +-------------------------+
-                     |
-                     v
-        +---------------------------+
-        |   AlertListener           |
-        |---------------------------|
-        | +onAlert()                |
-        +------------+--------------+
-                     |
-                     v
-        +---------------------------+
-        |    MainDashboard          |
-        |---------------------------|
-        | -tableManager             |
-        | -alertSidebar             |
-        | -statusBar                |
-        | -toolbarManager           |
-        +------------+--------------+
-                     |
-                     v
-   +--------------------------------------------------------+
-   | UI MANAGERS                                            |
-   |--------------------------------------------------------|
-   | ProcessTableManager                                    |
-   | AlertSidebarManager                                    |
-   | StatusBarManager                                       |
-   | ToolbarManager                                         |
-   | RuleManagerDialog                                      |
-   +--------------------------------------------------------+
-```
+![Class Diagram](architecture/ClassDiagram.png)
 ------------------------------------------------------------
 MODEL RELATIONSHIPS
 ------------------------------------------------------------
-```
-CustomRule
-|
-+----> Condition (1..*)
-|
-+----> RuleAction (enum)
+![Model Relationship Diagram](architecture/ModelRelationship.png)
 
-AlertEvent
-|
-+----> ProcessInfo
-|
-+----> Severity
-|
-+----> AlertType
+-----
 
-ProcessInfo
-|
-+----> Status
-
-AppConfig (Singleton)
-|
-+----> ConfigState (DTO)
-|
-+----> List<CustomRule>
-
-HistoryStorage
-|
-+----> AlertEvent (persisted)
-|
-+----> ProcessInfo (snapshot)
-```
-============================================================
 4. SEQUENCE DIAGRAM (SCAN CYCLE)
    ============================================================
-```
-User
-|
-v
-MainDashboard
-|
-v
-ProcessMonitor -----> ProcessScanner -----> OS
-|                    |                 |
-|<-------------------|                 |
-|
-|---- detect new/exited processes ----|
-|
-|---- notify listeners --------------> AlertEngine
-|                                     |
-|                                     v
-|                                 evaluate rules
-|                                     |
-|                                     v
-|                                 AlertEvent
-|                                     |
-|                                     v
-|-------------------------------> MainDashboard (UI)
+![Sequence Diagram](architecture/SequenceDiagram.png)
 
-      |
-      |-------------------------------> CustomRuleEngine
-                                            |
-                                            v
-                                     RuleEvaluator
-                                            |
-                                            v
-                                     RuleActionExecutor
-                                            |
-                                            v
-                                     ProcessKiller (optional)
-```
-============================================================
-5. USE CASE DIAGRAM (TEXTUAL)
+-----
+
+5.USE CASE DIAGRAM (TEXTUAL)
    ============================================================
-```
-         +------------------+
-         |      USER        |
-         +--------+---------+
-                  |
-   +--------------+----------------------+
-   |              |                      |
-   v              v                      v
-   View Processes   Manage Rules        Export Reports
-   |              |                      |
-   v              v                      v
-   Monitor System   Create/Delete      Generate PDF
-   Rules
-```
+![Use Case Diagram](architecture/UseCaseDiagram.png)
 SYSTEM ACTIONS:
 - Auto detect suspicious processes
 - Auto generate alerts
 - Auto kill malicious processes
 
-============================================================
-6. KEY DESIGN DECISIONS
+-----
+
+6.KEY DESIGN DECISIONS
    ============================================================
 
-1. Layered architecture for separation of concerns
-2. Observer pattern for decoupled communication
-3. Singleton pattern for global configuration
-4. Strategy pattern for rule execution
-5. Delegation pattern for UI modularity
-6. JSON storage for simplicity and portability
-7. ScheduledExecutorService for controlled concurrency
+### Layered Architecture for Separation of Concerns
+We adopted a layered architecture to separate system responsibilities into distinct components (UI, core logic, and data handling).  
+This improves maintainability, testability, and allows independent development of modules.
 
-============================================================
-7. THREADING MODEL
+### Observer Pattern for Decoupled Communication
+The Observer pattern is used to decouple the monitoring engine from UI and alert systems.  
+This allows multiple listeners (UI, logger, storage) to react to events without tight coupling.
+
+### Singleton Pattern for Global Configuration
+A Singleton is used for configuration management to ensure a single consistent source of truth across the application.
+
+### Strategy Pattern for Rule Execution
+The Strategy pattern enables dynamic rule evaluation logic, allowing new detection rules to be added without modifying core monitoring code.
+
+
+### Delegation Pattern for UI Modularity
+UI responsibilities are delegated to specialised components to keep the main controller lightweight and improve separation of UI concerns.
+
+### JSON Storage for Simplicity and Portability
+JSON is used for persistence due to its simplicity, readability, and ease of integration without requiring external database setup.
+
+### ScheduledExecutorService for Controlled Concurrency
+We use ScheduledExecutorService to manage background tasks in a controlled and thread-safe manner, preventing uncontrolled thread creation.
+
+### Event-Driven Communication Model
+The system follows an event-driven approach where components react to process events asynchronously, improving responsiveness and modularity.
+
+-----
+
+7.THREADING MODEL
    ============================================================
 
-[Monitor Thread]
-|
-+--> Process scanning
-+--> Rule evaluation
-+--> Listener notifications
+![Threading Model](architecture/Threads.png)
 
-[JavaFX UI Thread]
-|
-+--> All UI updates via Platform.runLater()
+-----
 
-[Background Threads]
-|
-+--> Report generation
-+--> Process killing
-
-============================================================
-8. DATA FLOW SUMMARY
+8.DATA FLOW SUMMARY
    ============================================================
-```
-Processes (OS)
-↓
-ProcessScanner
-↓
-ProcessMonitor
-↓
-+--------------------------+
-| AlertEngine              |
-| CustomRuleEngine         |
-+--------------------------+
-↓
-RuleActionExecutor
-↓
-+--------------------------+
-| AlertEvent               |
-| ProcessKiller            |
-+--------------------------+
-↓
-HistoryStorage + UI
-```
+![Data Flow Summary](architecture/DataFLowSummary.png)
