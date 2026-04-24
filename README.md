@@ -42,32 +42,6 @@ java -jar build/libs/ProcessGuard-1.6.jar
 ./gradlew test
 ```
 
-## Project Structure
-
-```
-src/main/java/com/processguard/
-├── ProcessGuardMain.java         # Application entry point
-├── core/                         # Business logic
-│   ├── ProcessMonitor.java       # Scheduled scan orchestrator
-│   ├── ProcessScanner.java       # OS process enumeration
-│   ├── AlertEngine.java          # Built-in alert rules
-│   ├── CustomRuleEngine.java     # Custom rule orchestrator
-│   ├── RuleEvaluator.java        # Rule condition matching
-│   ├── RuleActionExecutor.java   # Rule action execution
-│   ├── ReportExporter.java       # PDF report generation
-│   ├── ProcessKiller.java        # Cross-platform process termination
-│   ├── HistoryStorage.java       # JSON persistence
-│   └── AppConfig.java            # Singleton configuration manager
-├── models/                       # Data models and enums
-├── listeners/                    # Observer interfaces
-└── ui/                           # JavaFX user interface
-    ├── MainDashboard.java        # Application shell and observer routing
-    ├── ProcessTableManager.java  # Process table with sorting and context menu
-    ├── AlertSidebarManager.java  # Alert list and process details panel
-    ├── StatusBarManager.java     # Bottom status bar with live metrics
-    ├── ToolbarManager.java       # Toolbar with monitoring controls
-    └── RuleManagerDialog.java    # Custom rule creation dialog
-```
 
 ## Tech Stack
 
@@ -81,4 +55,4 @@ src/main/java/com/processguard/
 
 ## Team
 
-CS2103DE AY25/26 Semester 2 Team Project
+CS2103DE AY25/26 Semester 2 (Team 5)
