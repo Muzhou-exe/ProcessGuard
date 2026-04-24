@@ -104,7 +104,7 @@ On first launch, ProcessGuard creates a configuration directory at `~/.processgu
 
 ## 4. Understanding the Interface
 
-![ProcessGuard UI](images/UI.png)
+![ProcessGuard UI](architecture/UI.png)
 
 ### 4.1 Toolbar (Top)
 

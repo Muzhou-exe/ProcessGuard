@@ -26,7 +26,7 @@ ProcessGuard is a desktop system monitoring application that tracks running proc
 
 ProcessGuard follows a layered architecture with clear separation of concerns:
 
-![System Architecture Overview Diagram](images/ArchitectureOverview.png)
+![System Architecture Overview Diagram](architecture/ArchitectureOverview.png)
 
 ### 2.1 Component Interactions
 
@@ -61,7 +61,7 @@ ProcessGuard uses the Observer pattern extensively for loose coupling between co
 
 **Implementations:** `MainDashboard`
 
-![Observer Pattern Diagram](images/ObserverPattern.png)
+![Observer Pattern Diagram](architecture/ObserverPattern.png)
 
 ### 3.2 Singleton Pattern
 
@@ -154,13 +154,13 @@ This keeps `MainDashboard` focused on lifecycle management and observer routing.
 
 ## 5. Class Diagram
 
-![Class Diagram](images/ClassDiagram.png)
+![Class Diagram](architecture/ClassDiagram.png)
 
 ---
 
 ## 6. Sequence Diagram: Scan Cycle
 
-![Sequence Diagram](images/SequenceDiagram.png)
+![Sequence Diagram](architecture/SequenceDiagram.png)
 
 ---
 
