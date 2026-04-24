@@ -158,7 +158,7 @@ This keeps `MainDashboard` focused on lifecycle management and observer routing.
 
 ---
 
-## 6. Sequence Diagram: Scan Cycle
+## 6. Sequence Diagram
 
 ![Sequence Diagram](architecture/SequenceDiagram.png)
 

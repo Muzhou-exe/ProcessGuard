@@ -39,13 +39,13 @@ MODEL RELATIONSHIPS
 
 -----
 
-4. SEQUENCE DIAGRAM (SCAN CYCLE)
+4. SEQUENCE DIAGRAM
    ============================================================
 ![Sequence Diagram](architecture/SequenceDiagram.png)
 
 -----
 
-5.USE CASE DIAGRAM (TEXTUAL)
+5.USE CASE DIAGRAM
    ============================================================
 ![Use Case Diagram](architecture/UseCaseDiagram.png)
 SYSTEM ACTIONS:
