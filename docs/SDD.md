@@ -96,4 +96,4 @@ The system follows an event-driven approach where components react to process ev
 
 8.DATA FLOW SUMMARY
    ============================================================
-![Data Flow Summary](architecture/DataFLowSummary.png)
+![Data Flow Summary](architecture/DataFlowSummary.png)
